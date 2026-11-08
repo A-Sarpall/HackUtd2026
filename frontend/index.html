@@ -16,522 +16,426 @@ body{margin:0;background:#F6F3EC;color:#1B1F2A;font-family:'Instrument Sans',sys
 a{color:#1F6B52}a:hover{color:#174F3D}
 *{box-sizing:border-box}
 input,textarea,button{font-family:inherit}
-@media(max-width:800px){aside{flex:1 1 100%!important;gap:12px!important;border-right:0!important}aside nav{flex-direction:row!important;flex-wrap:wrap}aside nav button{flex:1}main{padding:24px 16px 48px!important;width:100%}}
 @keyframes nmspin{to{transform:rotate(360deg)}}
+@keyframes nmpop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 </style>
 </helmet>
-<div style="min-height:100vh;display:flex;flex-direction:column;background:#F6F3EC">
+<div style="min-height:100vh;background:#F6F3EC">
 
-  <div data-screen-label="Demo banner" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:8px 24px;background:#2A2350;color:#F3F0FF;font-size:13px">
-    <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;font-weight:600;padding:2px 8px;border:1px solid #8E84C9;border-radius:4px">{{ dataBadge }}</span>
-    <span>{{ dataDescription }}</span>
-    <span style="flex:1"></span>
-    <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">{{ modeLabel }}</span>
-  </div>
-
-  <div style="display:flex;flex-wrap:wrap;flex:1;min-height:0">
-
-    <aside style="flex:0 0 232px;padding:24px 16px;border-right:1px solid #E4DFD3;display:flex;flex-direction:column;gap:24px">
-      <div style="display:flex;align-items:center;gap:10px;padding:0 8px">
+  <header style="position:sticky;top:0;z-index:40;background:#F6F3EC;border-bottom:1px solid #E4DFD3">
+    <div style="max-width:960px;margin:0 auto;padding:12px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px">
+      <div style="display:flex;align-items:center;gap:10px">
         <div style="width:28px;height:28px;border-radius:7px;background:#1F6B52;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px">N</div>
         <div style="font-weight:700;font-size:18px;letter-spacing:-.01em">NextMove</div>
       </div>
-      <nav style="display:flex;flex-direction:column;gap:2px">
-        <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="4">
-          <button onClick="{{ n.go }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border:0;cursor:pointer;padding:10px 12px;border-radius:8px;background:{{ n.bg }};color:#1B1F2A" style-hover="background:#ECE7DB">
-            <span style="font-size:14px;font-weight:600">{{ n.label }}</span>
-            <span style="font-size:12px;color:#5A6070">{{ n.sub }}</span>
-          </button>
-        </sc-for>
-      </nav>
-      <div style="flex:1"></div>
-      <div style="display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid #E4DFD3;border-radius:10px;background:#FBF9F4">
-        <div style="font-size:12px;font-weight:600;color:#5A6070;text-transform:uppercase;letter-spacing:.06em">Bank connection</div>
-        <div style="font-size:13px;color:#1B1F2A">{{ bankConnection }}</div>
-        <button onClick="{{ trySync }}" style="border:1px solid #CFC8B8;background:#fff;border-radius:7px;padding:8px 10px;font-size:13px;font-weight:600;cursor:pointer;color:#1B1F2A" style-hover="background:#F1EDE3">{{ syncBtnLabel }}</button>
-        <sc-if value="{{ syncErr }}" hint-placeholder-val="{{ false }}">
-          <div style="font-size:12px;line-height:1.45;color:#A3261B">
-            <div style="font-family:'IBM Plex Mono',monospace;font-weight:600">{{ syncErr.code }}</div>
-            <div style="color:#5A6070">{{ syncErr.text }}</div>
-          </div>
-        </sc-if>
-        <sc-if value="{{ syncNotice }}" hint-placeholder-val="{{ false }}">
-          <div style="font-size:12px;line-height:1.45;color:#5A6070">{{ syncNotice }}</div>
-        </sc-if>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;font-weight:600;padding:3px 8px;border-radius:4px;background:#2A2350;color:#F3F0FF">{{ dataBadge }}</span>
+      <span style="flex:1"></span>
+      <button onClick="{{ trySync }}" style="display:flex;align-items:center;gap:8px;border:1px solid #CFC8B8;background:#fff;border-radius:999px;padding:7px 14px;font-size:13px;color:#1B1F2A;cursor:pointer" style-hover="background:#F1EDE3">
+        <span style="width:8px;height:8px;border-radius:50%;background:#B5AE9E"></span>{{ syncBtnLabel }}
+      </button>
+      <button onClick="{{ toggleSide }}" style="display:flex;align-items:center;gap:8px;border:0;background:#1F6B52;color:#fff;border-radius:999px;padding:8px 16px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#174F3D">
+        <span style="width:8px;height:8px;border-radius:50%;background:#9FE0C4"></span>Sidekick
+      </button>
+    </div>
+    <sc-if value="{{ syncErr }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width:960px;margin:0 auto;padding:0 24px 12px">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 14px;background:#fff;border:1px solid #E4DFD3;border-radius:10px;font-size:13px">
+          <span style="font-weight:600">Bank connection isn't available yet.</span>
+          <span style="color:#5A6070">{{ syncErr.text }}</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8F9C">{{ syncErr.code }}</span>
+          <span style="flex:1"></span>
+          <button onClick="{{ dismissSync }}" style="border:0;background:transparent;color:#5A6070;font-size:13px;cursor:pointer;text-decoration:underline;padding:0">Dismiss</button>
+        </div>
       </div>
-    </aside>
+    </sc-if>
+    <sc-if value="{{ syncNotice }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width:960px;margin:0 auto;padding:0 24px 12px">
+        <div style="padding:10px 14px;background:#E6EDF5;border-radius:10px;font-size:13px;color:#34506F">{{ syncNotice }}</div>
+      </div>
+    </sc-if>
+  </header>
 
-    <main style="flex:1 1 560px;min-width:0;padding:32px 40px 64px;display:flex;flex-direction:column;gap:24px;max-width:1180px">
+  <main style="max-width:960px;margin:0 auto;padding:32px 24px 96px;display:flex;flex-direction:column;gap:40px">
 
-      <sc-if value="{{ isConnecting }}" hint-placeholder-val="{{ false }}">
-        <div style="display:flex;align-items:center;gap:12px;padding:48px 0;color:#5A6070;font-size:15px">
-          <div style="width:16px;height:16px;border:2px solid #CFC8B8;border-top-color:#1F6B52;border-radius:50%;animation:nmspin .8s linear infinite"></div>
-          Starting a synthetic demo session…
+    <sc-if value="{{ isConnecting }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:12px;padding:48px 0;color:#5A6070;font-size:15px">
+        <div style="width:16px;height:16px;border:2px solid #CFC8B8;border-top-color:#1F6B52;border-radius:50%;animation:nmspin .8s linear infinite"></div>
+        Getting your demo ready…
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isUnreachable }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width:620px;display:flex;flex-direction:column;gap:16px;padding:32px;background:#fff;border:1px solid #E4DFD3;border-radius:16px">
+        <div style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:#A3261B;font-weight:600">{{ connErrCode }}</div>
+        <div style="font-size:24px;font-weight:600;letter-spacing:-.01em">We can't reach NextMove right now</div>
+        <div style="font-size:15px;line-height:1.55;color:#5A6070;text-wrap:pretty">This page talks to the NextMove service at <code style="font-family:'IBM Plex Mono',monospace;font-size:13px">/api/v1</code> on the same address. Start it with <code style="font-family:'IBM Plex Mono',monospace;font-size:13px">npm run dev</code> and open this page through the same-origin proxy.</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px">
+          <button onClick="{{ connect }}" style="border:0;background:#1F6B52;color:#fff;border-radius:10px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#174F3D">Try again</button>
+          <button onClick="{{ useRecorded }}" style="border:1px solid #CFC8B8;background:#fff;color:#1B1F2A;border-radius:10px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#F1EDE3">See a recorded walkthrough</button>
         </div>
-      </sc-if>
+        <div style="font-size:13px;color:#8A8F9C;line-height:1.5">The walkthrough replays answers recorded from the local service with no AI key. Everything in it is marked "Recorded".</div>
+      </div>
+    </sc-if>
 
-      <sc-if value="{{ isUnreachable }}" hint-placeholder-val="{{ false }}">
-        <div style="max-width:620px;display:flex;flex-direction:column;gap:16px;padding:32px;background:#fff;border:1px solid #E4DFD3;border-radius:14px">
-          <div style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:#A3261B;font-weight:600">{{ connErrCode }}</div>
-          <div style="font-size:24px;font-weight:600;letter-spacing:-.01em">Can't reach the NextMove API</div>
-          <div style="font-size:15px;line-height:1.55;color:#5A6070;text-wrap:pretty">This page calls <code style="font-family:'IBM Plex Mono',monospace;font-size:13px">/api/v1</code> on its own origin. Run the backend with <code style="font-family:'IBM Plex Mono',monospace;font-size:13px">npm run dev</code> (127.0.0.1:3001) and serve this frontend through a same-origin proxy, then retry.</div>
-          <div style="display:flex;flex-wrap:wrap;gap:10px">
-            <button onClick="{{ connect }}" style="border:0;background:#1F6B52;color:#fff;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#174F3D">Retry live API</button>
-            <button onClick="{{ useRecorded }}" style="border:1px solid #CFC8B8;background:#fff;color:#1B1F2A;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#F1EDE3">Open recorded walkthrough</button>
+    <sc-if value="{{ isReady }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:48px">
+
+        <sc-if value="{{ isRecorded }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 14px;border:1px dashed #8E84C9;background:#F3F0FF;border-radius:10px;font-size:13px;color:#2A2350;margin-bottom:-24px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11px;letter-spacing:.08em">RECORDED</span>
+            <span>You're seeing replays of the local service, not live answers. Some inputs are fixed to what was recorded.</span>
+            <span style="flex:1"></span>
+            <button onClick="{{ connect }}" style="border:0;background:transparent;color:#2A2350;text-decoration:underline;font-size:13px;cursor:pointer;padding:0">Try live</button>
           </div>
-          <div style="font-size:13px;color:#8A8F9C;line-height:1.5">The recorded walkthrough replays responses captured from the local backend (no NVIDIA key). Every screen in that mode is labelled "Recorded".</div>
-        </div>
-      </sc-if>
+        </sc-if>
 
-      <sc-if value="{{ isReady }}" hint-placeholder-val="{{ true }}">
-        <div style="display:flex;flex-direction:column;gap:24px">
+        <sc-if value="{{ snapErr }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 16px;background:#F9E3DF;color:#A3261B;border-radius:10px;font-size:14px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-weight:600">{{ snapErr.code }}</span>
+            <span>{{ snapErr.text }}</span>
+            <span style="flex:1"></span>
+            <button onClick="{{ connect }}" style="border:1px solid #A3261B;background:transparent;color:#A3261B;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer">Start over</button>
+          </div>
+        </sc-if>
 
-          <sc-if value="{{ isRecorded }}" hint-placeholder-val="{{ false }}">
-            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 14px;border:1px dashed #8E84C9;background:#F3F0FF;border-radius:10px;font-size:13px;color:#2A2350">
-              <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11px;letter-spacing:.08em">RECORDED</span>
-              <span>Responses below are replays of the local backend, not live calls. Inputs are limited to what was recorded.</span>
-              <span style="flex:1"></span>
-              <button onClick="{{ connect }}" style="border:0;background:transparent;color:#2A2350;text-decoration:underline;font-size:13px;cursor:pointer;padding:0">Try live API</button>
+        <!-- 1. WHERE YOU STAND -->
+        <section data-screen-label="01 Where you stand" style="display:flex;flex-direction:column;gap:20px">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:13px;color:#5A6070">As of {{ asOfLabel }}</div>
+            <h1 style="margin:0;font-size:36px;line-height:1.15;font-weight:600;letter-spacing:-.02em">Here's where your money stands.</h1>
+            <p style="margin:0;font-size:20px;line-height:1.7;color:#1B1F2A;max-width:720px;text-wrap:pretty">You have <span data-term="checking" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:18px;background:#E6F1EC;border-bottom:1.5px dotted #1F6B52;border-radius:3px;padding:0 3px;cursor:help;outline:none" style-hover="background:#CFE6DA">{{ v.checking }}</span> in your <span data-term="checking" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="background:#E6F1EC;border-bottom:1.5px dotted #1F6B52;border-radius:3px;padding:0 3px;cursor:help;outline:none" style-hover="background:#CFE6DA">checking account</span> and <span data-term="savings" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:18px;background:#E6F1EC;border-bottom:1.5px dotted #1F6B52;border-radius:3px;padding:0 3px;cursor:help;outline:none" style-hover="background:#CFE6DA">{{ v.savings }}</span> in <span data-term="savings" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="background:#E6F1EC;border-bottom:1.5px dotted #1F6B52;border-radius:3px;padding:0 3px;cursor:help;outline:none" style-hover="background:#CFE6DA">savings</span>. You <span data-term="owe" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="background:#E6F1EC;border-bottom:1.5px dotted #1F6B52;border-radius:3px;padding:0 3px;cursor:help;outline:none" style-hover="background:#CFE6DA">owe</span> <span data-term="owe" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:18px;background:#E6F1EC;border-bottom:1.5px dotted #1F6B52;border-radius:3px;padding:0 3px;cursor:help;outline:none" style-hover="background:#CFE6DA">{{ v.owe }}</span>.</p>
+            <div style="font-size:13px;color:#8A8F9C">Hover or tap anything highlighted to see what it means.</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">
+            <div style="padding:20px;background:#fff;border:1px solid #E4DFD3;border-radius:14px;display:flex;flex-direction:column;gap:10px">
+              <span data-term="networth" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="align-self:flex-start;font-size:14px;font-weight:600;color:#1B1F2A;background:#E6F1EC;border-bottom:1.5px dotted #1F6B52;border-radius:3px;padding:0 3px;cursor:help;outline:none" style-hover="background:#CFE6DA">What you're worth</span>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:30px;font-weight:500;letter-spacing:-.02em;color:{{ v.networthColor }}">{{ v.networth }}</div>
+              <div style="font-size:14px;color:#5A6070;line-height:1.45">{{ v.networthLine }}</div>
             </div>
-          </sc-if>
-
-          <sc-if value="{{ snapErr }}" hint-placeholder-val="{{ false }}">
-            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 16px;background:#F9E3DF;color:#A3261B;border-radius:10px;font-size:14px">
-              <span style="font-family:'IBM Plex Mono',monospace;font-weight:600">{{ snapErr.code }}</span>
-              <span>{{ snapErr.text }}</span>
-              <span style="flex:1"></span>
-              <button onClick="{{ connect }}" style="border:1px solid #A3261B;background:transparent;color:#A3261B;border-radius:7px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer">Start new session</button>
+            <div style="padding:20px;background:#fff;border:1px solid #E4DFD3;border-radius:14px;display:flex;flex-direction:column;gap:10px">
+              <span data-term="emergency" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="align-self:flex-start;font-size:14px;font-weight:600;color:#1B1F2A;background:#E6F1EC;border-bottom:1.5px dotted #1F6B52;border-radius:3px;padding:0 3px;cursor:help;outline:none" style-hover="background:#CFE6DA">Emergency savings</span>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:30px;font-weight:500;letter-spacing:-.02em;color:#1B1F2A">{{ v.emergency }}</div>
+              <div style="font-size:14px;color:#5A6070;line-height:1.45">How long your savings could pay your <span data-term="essentials" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="color:#1B1F2A;background:#E6F1EC;border-bottom:1.5px dotted #1F6B52;border-radius:3px;padding:0 3px;cursor:help;outline:none" style-hover="background:#CFE6DA">essential bills</span> if your income stopped.</div>
             </div>
-          </sc-if>
+            <div style="padding:20px;background:#fff;border:1px solid #E4DFD3;border-radius:14px;display:flex;flex-direction:column;gap:10px">
+              <span data-term="lowest" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="align-self:flex-start;font-size:14px;font-weight:600;color:#1B1F2A;background:#E6F1EC;border-bottom:1.5px dotted #1F6B52;border-radius:3px;padding:0 3px;cursor:help;outline:none" style-hover="background:#CFE6DA">Lowest balance ahead</span>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:30px;font-weight:500;letter-spacing:-.02em;color:{{ v.lowestColor }}">{{ v.lowest }}</div>
+              <div style="font-size:14px;color:#5A6070;line-height:1.45">{{ v.lowestLine }} <span data-term="cushion" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="color:#1B1F2A;background:#E6F1EC;border-bottom:1.5px dotted #1F6B52;border-radius:3px;padding:0 3px;cursor:help;outline:none" style-hover="background:#CFE6DA">safety cushion</span>.</div>
+            </div>
+          </div>
 
-          <!-- SNAPSHOT -->
-          <sc-if value="{{ isSnapshot }}" hint-placeholder-val="{{ true }}">
-            <div data-screen-label="Snapshot" style="display:flex;flex-direction:column;gap:24px">
-              <header style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 24px">
-                <div style="display:flex;flex-direction:column;gap:6px">
-                  <div style="font-size:13px;color:#5A6070">As of {{ asOfLabel }} · data quality: {{ snapQuality }}</div>
-                  <h1 style="margin:0;font-size:32px;font-weight:600;letter-spacing:-.02em">Your financial snapshot</h1>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:13px;font-weight:600;color:#5A6070">What NextMove noticed</div>
+            <sc-for list="{{ findings }}" as="f" hint-placeholder-count="3">
+              <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;background:{{ f.bg }};border-radius:10px">
+                <span style="flex:0 0 auto;margin-top:6px;width:8px;height:8px;border-radius:50%;background:{{ f.dot }}"></span>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <span style="font-size:11px;font-weight:600;letter-spacing:.04em;color:{{ f.dot }}">{{ f.kind }}</span>
+                  <span style="font-size:15px;line-height:1.45;color:#1B1F2A">{{ f.text }}</span>
                 </div>
-                <span style="flex:1"></span>
-                <button onClick="{{ goCompare }}" style="border:0;background:#1F6B52;color:#fff;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#174F3D">Check an extra payment →</button>
-              </header>
+              </div>
+            </sc-for>
+          </div>
+        </section>
 
-              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
-                <sc-for list="{{ metricCards }}" as="m" hint-placeholder-count="3">
-                  <div style="padding:18px 20px;background:#fff;border:1px solid #E4DFD3;border-radius:12px;display:flex;flex-direction:column;gap:8px">
-                    <div style="font-size:13px;color:#5A6070;font-weight:500">{{ m.label }}</div>
-                    <div style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:500;letter-spacing:-.02em;color:{{ m.color }}">{{ m.value }}</div>
-                    <div style="font-size:12px;color:#8A8F9C;line-height:1.4">{{ m.note }}</div>
-                  </div>
+        <!-- 2. NEXT 30 DAYS -->
+        <section data-screen-label="02 Next 30 days" style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="font-size:13px;color:#5A6070">Your <span data-term="forecast" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="color:#1B1F2A;background:#E6F1EC;border-bottom:1.5px dotted #1F6B52;border-radius:3px;padding:0 3px;cursor:help;outline:none" style-hover="background:#CFE6DA">30-day outlook</span></div>
+            <h2 style="margin:0;font-size:28px;line-height:1.2;font-weight:600;letter-spacing:-.02em;display:flex;align-items:center;gap:12px"><span style="flex:0 0 auto;width:12px;height:12px;border-radius:50%;background:{{ chart.toneColor }}"></span>{{ chart.headline }}</h2>
+            <div style="font-size:16px;color:#5A6070;line-height:1.55;text-wrap:pretty;max-width:720px">{{ chart.sub }}</div>
+          </div>
+
+          <div ref="{{ whatIfRef }}" style="padding:16px 20px;background:#fff;border:1px solid #E4DFD3;border-radius:14px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px 20px">
+            <div style="flex:1 1 100%;font-size:15px;font-weight:600">Thinking of <span data-term="extra" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="background:#E6F1EC;border-bottom:1.5px dotted #1F6B52;border-radius:3px;padding:0 3px;cursor:help;outline:none" style-hover="background:#CFE6DA">paying extra</span> toward what you owe? Try it here first.</div>
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;color:#5A6070">How much
+              <div style="display:flex;align-items:center;border:1px solid #CFC8B8;border-radius:10px;background:#fff;padding:0 12px">
+                <span style="font-family:'IBM Plex Mono',monospace;color:#8A8F9C">$</span>
+                <input value="{{ scenAmount }}" onChange="{{ setScenAmount }}" disabled="{{ isRecorded }}" inputmode="decimal" style="width:96px;padding:10px 6px;border:0;outline:none;font-family:'IBM Plex Mono',monospace;font-size:16px;color:#1B1F2A;background:transparent">
+              </div>
+            </label>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="font-size:12px;font-weight:600;color:#5A6070">When</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <sc-for list="{{ datePresets }}" as="p" hint-placeholder-count="3">
+                  <button onClick="{{ p.pick }}" style="padding:8px 12px;border-radius:10px;border:1px solid {{ p.border }};background:{{ p.bg }};color:#1B1F2A;font-size:13px;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:1px">
+                    <span style="font-weight:600">{{ p.label }}</span>
+                    <span style="font-size:11px;color:#5A6070">{{ p.sub }}</span>
+                  </button>
                 </sc-for>
+                <sc-if value="{{ isLive }}" hint-placeholder-val="{{ false }}">
+                  <input type="date" value="{{ scenDate }}" min="{{ scenMin }}" max="{{ scenMax }}" onChange="{{ setScenDate }}" style="padding:9px 10px;border:1px solid #CFC8B8;border-radius:10px;font-size:13px;color:#1B1F2A">
+                </sc-if>
               </div>
-
-              <section style="padding:24px;background:#fff;border:1px solid #E4DFD3;border-radius:14px;display:flex;flex-direction:column;gap:18px">
-                  <div style="display:flex;flex-direction:column;gap:6px">
-                    <div style="display:flex;align-items:center;gap:10px">
-                      <span style="flex:0 0 auto;width:12px;height:12px;border-radius:50%;background:{{ snapChart.toneColor }}"></span>
-                      <h2 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.01em">{{ snapChart.headline }}</h2>
-                    </div>
-                    <div style="font-size:15px;color:#5A6070;line-height:1.55;text-wrap:pretty;max-width:680px">{{ snapChart.sub }}</div>
-                  </div>
-                  <div style="display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12px;color:#5A6070">
-                    <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;height:3px;border-radius:2px;background:{{ snapChart.mainColor }}"></span>{{ snapChart.mainLabel }}</span>
-
-                    <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;border-top:2px dashed #A3261B"></span>Safety cushion</span>
-                  </div>
-                  <div style="position:relative;height:260px;margin:12px 0 0 48px">
-                    <div style="position:absolute;left:0;right:0;top:0;height:{{ snapChart.floorTop }};background:#F1F7F3"></div>
-                    <div style="position:absolute;left:0;right:0;top:{{ snapChart.floorTop }};bottom:0;background:#FBEAE6"></div>
-                    <div style="position:absolute;right:8px;bottom:6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:#A3261B">BELOW YOUR CUSHION</div>
-                    <div style="position:absolute;right:8px;top:6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:#1F6B52">ABOVE YOUR CUSHION</div>
-                    <sc-for list="{{ snapChart.yLabels }}" as="y" hint-placeholder-count="0">
-                      <div style="position:absolute;left:-52px;width:44px;text-align:right;top:{{ y.top }};transform:translateY(-50%);font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8F9C">{{ y.label }}</div>
-                    </sc-for>
-                    <svg viewBox="0 0 600 200" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible">
-                      <line x1="0" x2="600" y1="{{ snapChart.zeroY }}" y2="{{ snapChart.zeroY }}" stroke="#1B1F2A" stroke-opacity="0.35" stroke-width="1" vector-effect="non-scaling-stroke"></line>
-                      <line x1="0" x2="600" y1="{{ snapChart.floorY }}" y2="{{ snapChart.floorY }}" stroke="#A3261B" stroke-width="1.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"></line>
-
-                      <path d="{{ snapChart.mainPath }}" fill="none" stroke="{{ snapChart.mainColor }}" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
-                    </svg>
-                    <sc-for list="{{ snapChart.dots }}" as="d" hint-placeholder-count="0">
-                      <div style="position:absolute;left:{{ d.left }};top:{{ d.top }};width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;border:3px solid {{ d.color }}"></div>
-                    </sc-for>
-                    <sc-for list="{{ snapChart.markers }}" as="m" hint-placeholder-count="0">
-                      <div style="position:absolute;left:{{ m.left }};top:{{ m.top }};width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:{{ m.bg }};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #fff">{{ m.n }}</div>
-                    </sc-for>
-                    <sc-for list="{{ snapChart.callouts }}" as="c" hint-placeholder-count="0">
-                      <div style="position:absolute;left:{{ c.left }};top:{{ c.top }};transform:{{ c.transform }};display:flex;flex-direction:column;gap:1px;padding:6px 10px;background:#fff;border:1.5px solid {{ c.color }};border-radius:8px;white-space:nowrap;box-shadow:0 2px 8px rgba(27,31,42,.08)">
-                        <span style="font-size:11px;font-weight:600;color:{{ c.color }}">{{ c.text }}</span>
-                        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500;color:#1B1F2A">{{ c.value }}</span>
-                      </div>
-                    </sc-for>
-                  </div>
-                  <div style="position:relative;height:16px;margin-left:48px">
-                    <sc-for list="{{ snapChart.xLabels }}" as="x" hint-placeholder-count="0">
-                      <div style="position:absolute;left:{{ x.left }};transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8F9C;white-space:nowrap">{{ x.label }}</div>
-                    </sc-for>
-                  </div>
-                  <div style="display:flex;flex-direction:column;border-top:1px solid #F0ECE3">
-                    <sc-for list="{{ snapChart.legend }}" as="l" hint-placeholder-count="3">
-                      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:10px 0;border-bottom:1px solid #F0ECE3;font-size:14px">
-                        <span style="flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:{{ l.bg }};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ l.n }}</span>
-                        <span style="width:52px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8A8F9C">{{ l.date }}</span>
-                        <span style="flex:1 1 120px;font-weight:500">{{ l.name }}</span>
-                        <span style="font-family:'IBM Plex Mono',monospace;color:{{ l.amountColor }}">{{ l.amount }}</span>
-                        <span style="width:170px;text-align:right;font-size:13px;color:#5A6070">end of day <span style="font-family:'IBM Plex Mono',monospace;color:{{ l.afterColor }}">{{ l.after }}</span></span>
-                      </div>
-                    </sc-for>
-                  </div>
-                  <div style="font-size:12px;color:#8A8F9C;line-height:1.55;text-wrap:pretty">Safety cushion: the least you want to keep in checking for surprises ({{ floorLabel }} in this demo). Only listed bills and income are included. When a bill and income land on the same day, the bill counts first.</div>
-                </section>
-
-              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start">
-                <section style="padding:20px 24px;background:#fff;border:1px solid #E4DFD3;border-radius:14px;display:flex;flex-direction:column;gap:12px">
-                  <h2 style="margin:0;font-size:17px;font-weight:600">What we found</h2>
-                  <sc-for list="{{ findings }}" as="f" hint-placeholder-count="3">
-                    <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid #F0ECE3">
-                      <span style="flex:0 0 auto;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.06em;padding:3px 7px;border-radius:4px;background:{{ f.bg }};color:{{ f.fg }}">{{ f.sev }}</span>
-                      <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
-                        <div style="font-size:14px;line-height:1.45;font-weight:500">{{ f.title }}</div>
-                        <sc-if value="{{ f.hasEvidence }}" hint-placeholder-val="{{ false }}">
-                          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:#8A8F9C">Evidence
-                            <sc-for list="{{ f.evidence }}" as="ev" hint-placeholder-count="0">
-                              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;padding:1px 6px;border:1px solid #E4DFD3;border-radius:4px;color:#5A6070">{{ ev }}</span>
-                            </sc-for>
-                          </div>
-                        </sc-if>
-                      </div>
-                    </div>
-                  </sc-for>
-                </section>
-
-                <section style="padding:20px 24px;background:#fff;border:1px solid #E4DFD3;border-radius:14px;display:flex;flex-direction:column;gap:14px">
-                  <h2 style="margin:0;font-size:17px;font-weight:600">Inputs</h2>
-                  <div style="display:flex;flex-direction:column">
-                    <sc-for list="{{ balances }}" as="b" hint-placeholder-count="5">
-                      <div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid #F0ECE3;font-size:14px">
-                        <span style="color:#5A6070">{{ b.label }}</span>
-                        <span style="font-family:'IBM Plex Mono',monospace">{{ b.value }}</span>
-                      </div>
-                    </sc-for>
-                  </div>
-                  <div style="font-size:12px;font-weight:600;color:#5A6070;text-transform:uppercase;letter-spacing:.06em;padding-top:4px">Declared obligations</div>
-                  <div style="display:flex;flex-direction:column">
-                    <sc-for list="{{ events }}" as="e" hint-placeholder-count="3">
-                      <div style="display:flex;gap:12px;padding:8px 0;border-top:1px solid #F0ECE3;font-size:14px">
-                        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8A8F9C;width:52px">{{ e.date }}</span>
-                        <span style="flex:1">{{ e.id }}</span>
-                        <span style="font-family:'IBM Plex Mono',monospace;color:{{ e.color }}">{{ e.amount }}</span>
-                      </div>
-                    </sc-for>
-                  </div>
-                </section>
-              </div>
-
-              <sc-if value="{{ showAssumptions }}" hint-placeholder-val="{{ true }}">
-                <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:#5A6070;line-height:1.5">
-                  <div style="font-weight:600;color:#1B1F2A">Assumptions (from API)</div>
-                  <sc-for list="{{ assumptions }}" as="a" hint-placeholder-count="2">
-                    <div>— {{ a }}</div>
-                  </sc-for>
-                </div>
-              </sc-if>
             </div>
-          </sc-if>
-
-          <!-- COMPARE -->
-          <sc-if value="{{ isCompare }}" hint-placeholder-val="{{ false }}">
-            <div data-screen-label="Compare" style="display:flex;flex-direction:column;gap:24px">
-              <header style="display:flex;flex-direction:column;gap:6px">
-                <div style="font-size:13px;color:#5A6070">Scenario · extra debt payment</div>
-                <h1 style="margin:0;font-size:32px;font-weight:600;letter-spacing:-.02em">Can I make an extra payment?</h1>
-                <div style="font-size:15px;color:#5A6070;max-width:640px;line-height:1.5;text-wrap:pretty">Pick an amount and a date. NextMove replays your declared obligations and checks the lowest checking balance against your {{ floorLabel }} floor. Same-day outflows are applied before income.</div>
-              </header>
-
-              <section style="padding:20px 24px;background:#fff;border:1px solid #E4DFD3;border-radius:14px;display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end">
-                <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#5A6070">Amount (USD)
-                  <input value="{{ scenAmount }}" onChange="{{ setScenAmount }}" disabled="{{ isRecorded }}" inputmode="decimal" style="width:140px;padding:10px 12px;border:1px solid #CFC8B8;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:16px;color:#1B1F2A;background:#fff">
-                </label>
-                <div style="display:flex;flex-direction:column;gap:6px">
-                  <div style="font-size:13px;font-weight:600;color:#5A6070">Date</div>
-                  <div style="display:flex;flex-wrap:wrap;gap:6px">
-                    <sc-for list="{{ datePresets }}" as="p" hint-placeholder-count="3">
-                      <button onClick="{{ p.pick }}" style="padding:9px 12px;border-radius:8px;border:1px solid {{ p.border }};background:{{ p.bg }};color:#1B1F2A;font-size:13px;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:1px">
-                        <span style="font-weight:600">{{ p.label }}</span>
-                        <span style="font-size:11px;color:#5A6070">{{ p.sub }}</span>
-                      </button>
-                    </sc-for>
-                    <sc-if value="{{ isLive }}" hint-placeholder-val="{{ false }}">
-                      <input type="date" value="{{ scenDate }}" min="2026-11-07" max="2026-12-06" onChange="{{ setScenDate }}" style="padding:9px 10px;border:1px solid #CFC8B8;border-radius:8px;font-size:13px;color:#1B1F2A">
-                    </sc-if>
-                  </div>
-                </div>
-                <span style="flex:1"></span>
-                <button onClick="{{ runScenario }}" disabled="{{ scenLoading }}" style="border:0;background:#1F6B52;color:#fff;border-radius:8px;padding:12px 18px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#174F3D">{{ scenBtnLabel }}</button>
-              </section>
-
-              <sc-if value="{{ scenErr }}" hint-placeholder-val="{{ false }}">
-                <div style="padding:14px 16px;background:#F9E3DF;color:#A3261B;border-radius:10px;font-size:14px;display:flex;flex-wrap:wrap;gap:12px">
-                  <span style="font-family:'IBM Plex Mono',monospace;font-weight:600">{{ scenErr.code }}</span><span>{{ scenErr.text }}</span>
-                </div>
-              </sc-if>
-
+            <span style="flex:1"></span>
+            <div style="display:flex;gap:8px">
               <sc-if value="{{ hasScen }}" hint-placeholder-val="{{ false }}">
-                <div style="display:flex;flex-direction:column;gap:16px">
-                  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px">
-                    <sc-for list="{{ scenCards }}" as="c" hint-placeholder-count="2">
-                      <div style="padding:18px 20px;background:#fff;border:1px solid {{ c.border }};border-radius:12px;display:flex;flex-direction:column;gap:10px">
-                        <div style="display:flex;align-items:center;gap:10px">
-                          <span style="width:14px;height:3px;border-radius:2px;background:{{ c.line }}"></span>
-                          <span style="font-size:14px;font-weight:600">{{ c.title }}</span>
-                          <span style="flex:1"></span>
-                          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.06em;padding:3px 7px;border-radius:4px;background:{{ c.pbg }};color:{{ c.pfg }}">{{ c.policy }}</span>
-                        </div>
-                        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-                          <span style="font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:500;color:{{ c.minColor }}">{{ c.min }}</span>
-                          <span style="font-size:13px;color:#5A6070">lowest, on {{ c.minDate }}</span>
-                        </div>
-                        <div style="font-size:13px;color:#5A6070;line-height:1.45">{{ c.note }}</div>
-                      </div>
-                    </sc-for>
-                  </div>
-
-                  <section style="padding:24px;background:#fff;border:1px solid #E4DFD3;border-radius:14px;display:flex;flex-direction:column;gap:18px">
-                  <div style="display:flex;flex-direction:column;gap:6px">
-                    <div style="display:flex;align-items:center;gap:10px">
-                      <span style="flex:0 0 auto;width:12px;height:12px;border-radius:50%;background:{{ cmpChart.toneColor }}"></span>
-                      <h2 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.01em">{{ cmpChart.headline }}</h2>
-                    </div>
-                    <div style="font-size:15px;color:#5A6070;line-height:1.55;text-wrap:pretty;max-width:680px">{{ cmpChart.sub }}</div>
-                  </div>
-                  <div style="display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12px;color:#5A6070">
-                    <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;height:3px;border-radius:2px;background:{{ cmpChart.mainColor }}"></span>{{ cmpChart.mainLabel }}</span>
-                    <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;border-top:2px dashed #9AA0AC"></span>Without the payment</span>
-                    <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;border-top:2px dashed #A3261B"></span>Safety cushion</span>
-                  </div>
-                  <div style="position:relative;height:260px;margin:12px 0 0 48px">
-                    <div style="position:absolute;left:0;right:0;top:0;height:{{ cmpChart.floorTop }};background:#F1F7F3"></div>
-                    <div style="position:absolute;left:0;right:0;top:{{ cmpChart.floorTop }};bottom:0;background:#FBEAE6"></div>
-                    <div style="position:absolute;right:8px;bottom:6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:#A3261B">BELOW YOUR CUSHION</div>
-                    <div style="position:absolute;right:8px;top:6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:#1F6B52">ABOVE YOUR CUSHION</div>
-                    <sc-for list="{{ cmpChart.yLabels }}" as="y" hint-placeholder-count="0">
-                      <div style="position:absolute;left:-52px;width:44px;text-align:right;top:{{ y.top }};transform:translateY(-50%);font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8F9C">{{ y.label }}</div>
-                    </sc-for>
-                    <svg viewBox="0 0 600 200" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible">
-                      <line x1="0" x2="600" y1="{{ cmpChart.zeroY }}" y2="{{ cmpChart.zeroY }}" stroke="#1B1F2A" stroke-opacity="0.35" stroke-width="1" vector-effect="non-scaling-stroke"></line>
-                      <line x1="0" x2="600" y1="{{ cmpChart.floorY }}" y2="{{ cmpChart.floorY }}" stroke="#A3261B" stroke-width="1.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"></line>
-                      <path d="{{ cmpChart.basePath }}" fill="none" stroke="#9AA0AC" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"></path>
-                      <path d="{{ cmpChart.mainPath }}" fill="none" stroke="{{ cmpChart.mainColor }}" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
-                    </svg>
-                    <sc-for list="{{ cmpChart.dots }}" as="d" hint-placeholder-count="0">
-                      <div style="position:absolute;left:{{ d.left }};top:{{ d.top }};width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;border:3px solid {{ d.color }}"></div>
-                    </sc-for>
-                    <sc-for list="{{ cmpChart.markers }}" as="m" hint-placeholder-count="0">
-                      <div style="position:absolute;left:{{ m.left }};top:{{ m.top }};width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:{{ m.bg }};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #fff">{{ m.n }}</div>
-                    </sc-for>
-                    <sc-for list="{{ cmpChart.callouts }}" as="c" hint-placeholder-count="0">
-                      <div style="position:absolute;left:{{ c.left }};top:{{ c.top }};transform:{{ c.transform }};display:flex;flex-direction:column;gap:1px;padding:6px 10px;background:#fff;border:1.5px solid {{ c.color }};border-radius:8px;white-space:nowrap;box-shadow:0 2px 8px rgba(27,31,42,.08)">
-                        <span style="font-size:11px;font-weight:600;color:{{ c.color }}">{{ c.text }}</span>
-                        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500;color:#1B1F2A">{{ c.value }}</span>
-                      </div>
-                    </sc-for>
-                  </div>
-                  <div style="position:relative;height:16px;margin-left:48px">
-                    <sc-for list="{{ cmpChart.xLabels }}" as="x" hint-placeholder-count="0">
-                      <div style="position:absolute;left:{{ x.left }};transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8F9C;white-space:nowrap">{{ x.label }}</div>
-                    </sc-for>
-                  </div>
-                  <div style="display:flex;flex-direction:column;border-top:1px solid #F0ECE3">
-                    <sc-for list="{{ cmpChart.legend }}" as="l" hint-placeholder-count="3">
-                      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:10px 0;border-bottom:1px solid #F0ECE3;font-size:14px">
-                        <span style="flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:{{ l.bg }};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ l.n }}</span>
-                        <span style="width:52px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8A8F9C">{{ l.date }}</span>
-                        <span style="flex:1 1 120px;font-weight:500">{{ l.name }}</span>
-                        <span style="font-family:'IBM Plex Mono',monospace;color:{{ l.amountColor }}">{{ l.amount }}</span>
-                        <span style="width:170px;text-align:right;font-size:13px;color:#5A6070">end of day <span style="font-family:'IBM Plex Mono',monospace;color:{{ l.afterColor }}">{{ l.after }}</span></span>
-                      </div>
-                    </sc-for>
-                  </div>
-                  <div style="font-size:12px;color:#8A8F9C;line-height:1.55;text-wrap:pretty">Safety cushion: the least you want to keep in checking for surprises ({{ floorLabel }} in this demo). Only listed bills and income are included. When a bill and income land on the same day, the bill counts first.</div>
-                </section>
-
-                  <sc-if value="{{ scenBlocked }}" hint-placeholder-val="{{ false }}">
-                    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 18px;background:#FBEFD9;border-radius:10px;font-size:14px;color:#6B3F00">
-                      <span style="text-wrap:pretty">This date breaches your floor. Payday is Nov 14, but outflows count first that day. Compare Nov 15.</span>
-                      <span style="flex:1"></span>
-                      <button onClick="{{ tryDeferred }}" style="border:1px solid #9A5B00;background:transparent;color:#6B3F00;border-radius:7px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer">Compare Nov 15</button>
-                    </div>
-                  </sc-if>
-                  <div style="font-size:12px;color:#8A8F9C;line-height:1.5">Scenario on snapshot {{ scenMeta }}. Evidence: {{ scenEvidence }}. This is a comparison only; NextMove does not schedule or send payments.</div>
-                </div>
+                <button onClick="{{ clearScen }}" style="border:1px solid #CFC8B8;background:#fff;color:#1B1F2A;border-radius:10px;padding:11px 14px;font-size:14px;cursor:pointer" style-hover="background:#F1EDE3">Clear</button>
               </sc-if>
+              <button onClick="{{ runScenario }}" disabled="{{ scenLoading }}" style="border:0;background:#1F6B52;color:#fff;border-radius:10px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#174F3D">{{ scenBtnLabel }}</button>
             </div>
-          </sc-if>
-
-          <!-- ASK -->
-          <sc-if value="{{ isAsk }}" hint-placeholder-val="{{ false }}">
-            <div data-screen-label="Ask" style="display:flex;flex-direction:column;gap:24px;max-width:820px">
-              <header style="display:flex;flex-direction:column;gap:6px">
-                <div style="font-size:13px;color:#5A6070">Assistant · Nemotron, bounded</div>
-                <h1 style="margin:0;font-size:32px;font-weight:600;letter-spacing:-.02em">Ask about a payment</h1>
-                <div style="font-size:15px;color:#5A6070;line-height:1.5;text-wrap:pretty">The assistant can run the payment scenario and pick among verified results. Numbers come from the finance engine, not the model. It cannot approve or change anything.</div>
-              </header>
-              <section style="padding:16px;background:#fff;border:1px solid #E4DFD3;border-radius:14px;display:flex;flex-direction:column;gap:12px">
-                <textarea value="{{ askMsg }}" onChange="{{ setAskMsg }}" maxlength="2000" rows="3" placeholder="e.g. Can I pay $300 extra toward my card today?" style="border:0;outline:none;resize:vertical;font-size:16px;line-height:1.5;color:#1B1F2A;background:transparent"></textarea>
-                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-                  <sc-for list="{{ askSuggestions }}" as="s" hint-placeholder-count="2">
-                    <button onClick="{{ s.pick }}" style="border:1px solid #E4DFD3;background:#FBF9F4;border-radius:999px;padding:6px 12px;font-size:13px;color:#1B1F2A;cursor:pointer" style-hover="background:#F1EDE3">{{ s.text }}</button>
-                  </sc-for>
-                  <span style="flex:1"></span>
-                  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8F9C">{{ askCount }}/2000</span>
-                  <button onClick="{{ sendRun }}" disabled="{{ runLoading }}" style="border:0;background:#1F6B52;color:#fff;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#174F3D">{{ runBtnLabel }}</button>
-                </div>
-              </section>
-
-              <sc-if value="{{ runLoading }}" hint-placeholder-val="{{ false }}">
-                <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:#5A6070">
-                  <div style="width:14px;height:14px;border:2px solid #CFC8B8;border-top-color:#1F6B52;border-radius:50%;animation:nmspin .8s linear infinite"></div>
-                  Waiting for the run to finish. This can take up to 45 seconds.
-                </div>
-              </sc-if>
-
-              <sc-if value="{{ runErr }}" hint-placeholder-val="{{ false }}">
-                <div style="padding:14px 16px;background:#F9E3DF;color:#A3261B;border-radius:10px;font-size:14px;display:flex;flex-wrap:wrap;gap:12px">
-                  <span style="font-family:'IBM Plex Mono',monospace;font-weight:600">{{ runErr.code }}</span><span>{{ runErr.text }}</span>
-                </div>
-              </sc-if>
-
-              <sc-if value="{{ hasReceipt }}" hint-placeholder-val="{{ false }}">
-                <section style="background:#fff;border:1px solid #E4DFD3;border-radius:14px;overflow:hidden">
-                  <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:12px 20px;background:#FBF9F4;border-bottom:1px solid #E4DFD3;font-size:12px;color:#5A6070">
-                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.06em;padding:3px 7px;border-radius:4px;background:{{ receipt.sbg }};color:{{ receipt.sfg }}">{{ receipt.statusLabel }}</span>
-                    <span>Source: {{ receipt.provenance }}</span>
-                    <span style="flex:1"></span>
-                    <span style="font-family:'IBM Plex Mono',monospace">run {{ receipt.runId }}</span>
-                  </div>
-                  <div style="padding:20px;display:flex;flex-direction:column;gap:16px">
-                    <div style="font-size:17px;line-height:1.5;text-wrap:pretty">{{ receipt.summary }}</div>
-                    <sc-if value="{{ receipt.hasScenarios }}" hint-placeholder-val="{{ false }}">
-                      <div style="display:flex;flex-direction:column">
-                        <sc-for list="{{ receipt.scenarios }}" as="r" hint-placeholder-count="0">
-                          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:10px 0;border-top:1px solid #F0ECE3;font-size:14px">
-                            <span style="width:90px;font-weight:600">{{ r.key }}</span>
-                            <span style="font-family:'IBM Plex Mono',monospace">{{ r.min }}</span>
-                            <span style="color:#5A6070">lowest on {{ r.minDate }}</span>
-                            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;padding:3px 7px;border-radius:4px;background:{{ r.pbg }};color:{{ r.pfg }}">{{ r.policy }}</span>
-                            <span style="flex:1"></span>
-                            <span style="font-size:12px;color:#1F6B52;font-weight:600">{{ r.selected }}</span>
-                          </div>
-                        </sc-for>
-                      </div>
-                    </sc-if>
-                    <sc-if value="{{ receipt.hasTrace }}" hint-placeholder-val="{{ false }}">
-                      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:#5A6070">Tools run
-                        <sc-for list="{{ receipt.trace }}" as="t" hint-placeholder-count="0">
-                          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;padding:2px 7px;border:1px solid #E4DFD3;border-radius:4px">{{ t }}</span>
-                        </sc-for>
-                      </div>
-                    </sc-if>
-                    <sc-if value="{{ receipt.suggestCompare }}" hint-placeholder-val="{{ false }}">
-                      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 14px;background:#F6F3EC;border-radius:10px;font-size:14px;color:#5A6070">
-                        <span>You can still compare an explicit payment without the assistant.</span>
-                        <span style="flex:1"></span>
-                        <button onClick="{{ goCompare }}" style="border:1px solid #CFC8B8;background:#fff;color:#1B1F2A;border-radius:7px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer">Open Compare</button>
-                      </div>
-                    </sc-if>
-                  </div>
-                </section>
-              </sc-if>
-            </div>
-          </sc-if>
-
-          <!-- GOAL -->
-          <sc-if value="{{ isGoal }}" hint-placeholder-val="{{ false }}">
-            <div data-screen-label="Goal" style="display:flex;flex-direction:column;gap:24px;max-width:820px">
-              <header style="display:flex;flex-direction:column;gap:6px">
-                <div style="font-size:13px;color:#5A6070">Goal contribution · app preference</div>
-                <h1 style="margin:0;font-size:32px;font-weight:600;letter-spacing:-.02em">Adjust your goal contribution</h1>
-                <div style="font-size:15px;color:#5A6070;line-height:1.5;text-wrap:pretty">Lowering the contribution changes a setting in NextMove. It isn't scheduled, isn't in the forecast, and moves no money. Changes apply only after you approve.</div>
-              </header>
-
-              <section style="padding:20px 24px;background:#fff;border:1px solid #E4DFD3;border-radius:14px;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end">
-                <div style="display:flex;flex-direction:column;gap:4px">
-                  <div style="font-size:13px;color:#5A6070;font-weight:500">Current contribution</div>
-                  <div style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:500">{{ goalLabel }}</div>
-                  <div style="font-size:12px;color:#8A8F9C">Goal version {{ goalVersion }}</div>
-                </div>
+            <sc-if value="{{ scenErr }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:1 1 100%;padding:10px 12px;background:#F9E3DF;color:#A3261B;border-radius:8px;font-size:13px;display:flex;flex-wrap:wrap;gap:10px">
+                <span style="font-family:'IBM Plex Mono',monospace;font-weight:600">{{ scenErr.code }}</span><span>{{ scenErr.text }}</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{ scenBlocked }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:12px 14px;background:#FBEFD9;border-radius:10px;font-size:14px;color:#6B3F00">
+                <span style="text-wrap:pretty">Your paycheck arrives Nov 14, but on that day bills are counted before it lands. Waiting one more day is worth a look.</span>
                 <span style="flex:1"></span>
-                <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#5A6070">New amount (USD)
-                  <input value="{{ propAmount }}" onChange="{{ setPropAmount }}" disabled="{{ isRecorded }}" inputmode="decimal" style="width:140px;padding:10px 12px;border:1px solid #CFC8B8;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:16px;color:#1B1F2A;background:#fff">
-                </label>
-                <button onClick="{{ propose }}" disabled="{{ propLoading }}" style="border:1px solid #1B1F2A;background:#fff;color:#1B1F2A;border-radius:8px;padding:11px 16px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#F1EDE3">{{ propBtnLabel }}</button>
-              </section>
+                <button onClick="{{ tryDeferred }}" style="border:1px solid #9A5B00;background:#fff;color:#6B3F00;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer">Try Nov 15 instead</button>
+              </div>
+            </sc-if>
+          </div>
 
+          <div style="padding:24px;background:#fff;border:1px solid #E4DFD3;border-radius:16px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12px;color:#5A6070">
+              <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;height:3px;border-radius:2px;background:{{ chart.mainColor }}"></span>{{ chart.mainLabel }}</span>
+              <sc-if value="{{ hasScen }}" hint-placeholder-val="{{ false }}">
+                <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;border-top:2px dashed #9AA0AC"></span>Without the payment</span>
+              </sc-if>
+              <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;border-top:2px dashed #A3261B"></span>Safety cushion {{ floorLabel }}</span>
+            </div>
+            <div style="position:relative;height:260px;margin:14px 0 0 48px">
+              <div style="position:absolute;left:0;right:0;top:0;height:{{ chart.floorTop }};background:#F1F7F3"></div>
+              <div style="position:absolute;left:0;right:0;top:{{ chart.floorTop }};bottom:0;background:#FBEAE6"></div>
+              <div style="position:absolute;right:8px;bottom:6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:#A3261B">BELOW YOUR CUSHION</div>
+              <div style="position:absolute;right:8px;top:6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:#1F6B52">ABOVE YOUR CUSHION</div>
+              <sc-for list="{{ chart.yLabels }}" as="y" hint-placeholder-count="0">
+                <div style="position:absolute;left:-52px;width:44px;text-align:right;top:{{ y.top }};transform:translateY(-50%);font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8F9C">{{ y.label }}</div>
+              </sc-for>
+              <svg viewBox="0 0 600 200" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible">
+                <line x1="0" x2="600" y1="{{ chart.zeroY }}" y2="{{ chart.zeroY }}" stroke="#1B1F2A" stroke-opacity="0.35" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                <line x1="0" x2="600" y1="{{ chart.floorY }}" y2="{{ chart.floorY }}" stroke="#A3261B" stroke-width="1.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"></line>
+                <path d="{{ chart.basePath }}" fill="none" stroke="#9AA0AC" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"></path>
+                <path d="{{ chart.mainPath }}" fill="none" stroke="{{ chart.mainColor }}" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+              </svg>
+              <sc-for list="{{ chart.dots }}" as="d" hint-placeholder-count="0">
+                <div style="position:absolute;left:{{ d.left }};top:{{ d.top }};width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;border:3px solid {{ d.color }}"></div>
+              </sc-for>
+              <sc-for list="{{ chart.markers }}" as="m" hint-placeholder-count="0">
+                <div style="position:absolute;left:{{ m.left }};top:{{ m.top }};width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:{{ m.bg }};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #fff">{{ m.n }}</div>
+              </sc-for>
+              <sc-for list="{{ chart.callouts }}" as="c" hint-placeholder-count="0">
+                <div data-term="{{ c.term }}" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="position:absolute;left:{{ c.left }};top:{{ c.top }};transform:{{ c.transform }};display:flex;flex-direction:column;gap:1px;padding:6px 10px;background:#fff;border:1.5px solid {{ c.color }};border-radius:8px;white-space:nowrap;box-shadow:0 2px 8px rgba(27,31,42,.08);cursor:help;outline:none" style-hover="background:#F6FAF8">
+                  <span style="font-size:11px;font-weight:600;color:{{ c.color }}">{{ c.text }}</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500;color:#1B1F2A;border-bottom:1.5px dotted #1F6B52">{{ c.value }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="position:relative;height:16px;margin-left:48px">
+              <sc-for list="{{ chart.xLabels }}" as="x" hint-placeholder-count="0">
+                <div style="position:absolute;left:{{ x.left }};transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8F9C;white-space:nowrap">{{ x.label }}</div>
+              </sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px;padding-top:6px">
+              <div style="font-size:13px;font-weight:600;color:#5A6070;padding-bottom:4px">What's coming up</div>
+              <sc-for list="{{ chart.legend }}" as="l" hint-placeholder-count="3">
+                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:10px 0;border-top:1px solid #F0ECE3;font-size:15px">
+                  <span style="flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:{{ l.bg }};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ l.n }}</span>
+                  <span style="width:56px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8A8F9C">{{ l.date }}</span>
+                  <span style="flex:1 1 120px;font-weight:500">{{ l.name }}</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;color:{{ l.amountColor }}">{{ l.amount }}</span>
+                  <span style="width:180px;text-align:right;font-size:13px;color:#5A6070">leaves <span style="font-family:'IBM Plex Mono',monospace;color:{{ l.afterColor }}">{{ l.after }}</span></span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font-size:12px;color:#8A8F9C;line-height:1.55;text-wrap:pretty">Only the bills and income you've listed are included. When a bill and income land on the same day, the bill counts first. NextMove only compares options; it never sends payments.</div>
+          </div>
+        </section>
+
+        <!-- 3. SAVINGS GOAL -->
+        <section data-screen-label="03 Savings goal" style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="font-size:13px;color:#5A6070">Your savings goal</div>
+            <h2 style="margin:0;font-size:28px;line-height:1.2;font-weight:600;letter-spacing:-.02em">You plan to set aside <span data-term="goal" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" onClick="{{ showTip }}" style="font-family:'IBM Plex Mono',monospace;font-weight:500;background:#E6F1EC;border-bottom:2px dotted #1F6B52;border-radius:4px;padding:0 4px;cursor:help;outline:none" style-hover="background:#CFE6DA">{{ goalLabel }}</span> toward your goal.</h2>
+            <div style="font-size:16px;color:#5A6070;line-height:1.55;max-width:720px;text-wrap:pretty">You can lower this amount. It's only a setting in NextMove: no money moves, and the outlook above doesn't change. Nothing happens until you approve.</div>
+          </div>
+
+          <sc-if value="{{ noProposal }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:16px 20px;background:#fff;border:1px solid #E4DFD3;border-radius:14px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px 20px">
+              <label style="display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;color:#5A6070">New amount
+                <div style="display:flex;align-items:center;border:1px solid #CFC8B8;border-radius:10px;background:#fff;padding:0 12px">
+                  <span style="font-family:'IBM Plex Mono',monospace;color:#8A8F9C">$</span>
+                  <input value="{{ propAmount }}" onChange="{{ setPropAmount }}" disabled="{{ isRecorded }}" inputmode="decimal" style="width:96px;padding:10px 6px;border:0;outline:none;font-family:'IBM Plex Mono',monospace;font-size:16px;color:#1B1F2A;background:transparent">
+                </div>
+              </label>
+              <button onClick="{{ propose }}" disabled="{{ propLoading }}" style="border:1px solid #1B1F2A;background:#fff;color:#1B1F2A;border-radius:10px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#F1EDE3">{{ propBtnLabel }}</button>
               <sc-if value="{{ propErr }}" hint-placeholder-val="{{ false }}">
-                <div style="padding:14px 16px;background:#F9E3DF;color:#A3261B;border-radius:10px;font-size:14px;display:flex;flex-wrap:wrap;gap:12px">
+                <div style="flex:1 1 100%;padding:10px 12px;background:#F9E3DF;color:#A3261B;border-radius:8px;font-size:13px;display:flex;flex-wrap:wrap;gap:10px">
                   <span style="font-family:'IBM Plex Mono',monospace;font-weight:600">{{ propErr.code }}</span><span>{{ propErr.text }}</span>
                 </div>
               </sc-if>
-
-              <sc-if value="{{ hasProposal }}" hint-placeholder-val="{{ false }}">
-                <section style="background:#fff;border:2px solid {{ prop.border }};border-radius:14px;overflow:hidden">
-                  <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:12px 20px;background:#FBF9F4;border-bottom:1px solid #E4DFD3;font-size:12px;color:#5A6070">
-                    <span style="font-weight:600;color:#1B1F2A;font-size:13px">{{ prop.heading }}</span>
-                    <span style="flex:1"></span>
-                    <span style="font-family:'IBM Plex Mono',monospace">{{ prop.expiry }}</span>
-                  </div>
-                  <div style="padding:24px;display:flex;flex-direction:column;gap:20px">
-                    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px 24px">
-                      <div style="display:flex;flex-direction:column;gap:4px">
-                        <span style="font-size:12px;color:#5A6070">Before</span>
-                        <span style="font-family:'IBM Plex Mono',monospace;font-size:26px;color:#8A8F9C;text-decoration:line-through">{{ prop.old }}</span>
-                      </div>
-                      <span style="font-size:22px;color:#8A8F9C">→</span>
-                      <div style="display:flex;flex-direction:column;gap:4px">
-                        <span style="font-size:12px;color:#5A6070">After</span>
-                        <span style="font-family:'IBM Plex Mono',monospace;font-size:26px;color:#1B1F2A">{{ prop.new }}</span>
-                      </div>
-                    </div>
-                    <div style="font-size:14px;line-height:1.5;padding:12px 14px;background:#E3F0EA;color:#174F3D;border-radius:8px">{{ prop.effect }}</div>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px 16px;font-size:12px;color:#5A6070">
-                      <div>Proposal <span style="font-family:'IBM Plex Mono',monospace;color:#1B1F2A">{{ prop.id }}</span></div>
-                      <div>Hash <span style="font-family:'IBM Plex Mono',monospace;color:#1B1F2A">{{ prop.hash }}</span></div>
-                      <div>Goal v{{ prop.goalVersion }} · snapshot v{{ prop.snapVersion }}</div>
-                    </div>
-                    <sc-if value="{{ approveErr }}" hint-placeholder-val="{{ false }}">
-                      <div style="padding:12px 14px;background:#F9E3DF;color:#A3261B;border-radius:8px;font-size:14px;display:flex;flex-wrap:wrap;gap:12px">
-                        <span style="font-family:'IBM Plex Mono',monospace;font-weight:600">{{ approveErr.code }}</span><span>{{ approveErr.text }}</span>
-                      </div>
-                    </sc-if>
-                    <sc-if value="{{ prop.pending }}" hint-placeholder-val="{{ true }}">
-                      <div style="display:flex;flex-wrap:wrap;gap:10px">
-                        <button onClick="{{ approve }}" disabled="{{ approveLoading }}" style="border:0;background:#1F6B52;color:#fff;border-radius:8px;padding:12px 20px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#174F3D">{{ approveBtnLabel }}</button>
-                        <button onClick="{{ discard }}" style="border:1px solid #CFC8B8;background:#fff;color:#1B1F2A;border-radius:8px;padding:12px 16px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#F1EDE3">Discard</button>
-                      </div>
-                    </sc-if>
-                    <sc-if value="{{ prop.done }}" hint-placeholder-val="{{ false }}">
-                      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;font-size:14px">
-                        <span style="color:#1F6B52;font-weight:600">Applied. Snapshot refreshed: contribution is now {{ goalLabel }} (goal v{{ goalVersion }}).</span>
-                        <span style="flex:1"></span>
-                        <button onClick="{{ approve }}" style="border:0;background:transparent;color:#5A6070;text-decoration:underline;font-size:13px;cursor:pointer;padding:0">Send approval again</button>
-                      </div>
-                      <sc-if value="{{ repeatNote }}" hint-placeholder-val="{{ false }}">
-                        <div style="font-size:13px;color:#5A6070">Server returned "completed" for the same action ID without applying it twice.</div>
-                      </sc-if>
-                    </sc-if>
-                  </div>
-                </section>
-              </sc-if>
             </div>
           </sc-if>
 
+          <sc-if value="{{ hasProposal }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:2px solid {{ prop.border }};border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:18px;animation:nmpop .2s ease-out">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px">
+                <span style="font-size:17px;font-weight:600">{{ prop.heading }}</span>
+                <span style="flex:1"></span>
+                <span style="font-size:13px;color:#5A6070">{{ prop.expiry }}</span>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <span style="font-size:12px;color:#5A6070">Now</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:26px;color:#8A8F9C;text-decoration:line-through">{{ prop.old }}</span>
+                </div>
+                <span style="font-size:22px;color:#8A8F9C">→</span>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <span style="font-size:12px;color:#5A6070">After you approve</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:26px;color:#1B1F2A">{{ prop.new }}</span>
+                </div>
+              </div>
+              <div style="font-size:14px;line-height:1.5;padding:12px 14px;background:#E3F0EA;color:#174F3D;border-radius:10px">{{ prop.effect }}</div>
+              <sc-if value="{{ approveErr }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:10px 12px;background:#F9E3DF;color:#A3261B;border-radius:8px;font-size:13px;display:flex;flex-wrap:wrap;gap:10px">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-weight:600">{{ approveErr.code }}</span><span>{{ approveErr.text }}</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{ prop.pending }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;flex-wrap:wrap;gap:10px">
+                  <button onClick="{{ approve }}" disabled="{{ approveLoading }}" style="border:0;background:#1F6B52;color:#fff;border-radius:10px;padding:12px 22px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#174F3D">{{ approveBtnLabel }}</button>
+                  <button onClick="{{ discard }}" style="border:1px solid #CFC8B8;background:#fff;color:#1B1F2A;border-radius:10px;padding:12px 18px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#F1EDE3">Cancel</button>
+                </div>
+              </sc-if>
+              <sc-if value="{{ prop.done }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;font-size:15px">
+                  <span style="color:#1F6B52;font-weight:600">Done. Your plan now sets aside {{ goalLabel }}.</span>
+                  <span style="flex:1"></span>
+                  <button onClick="{{ discard }}" style="border:1px solid #CFC8B8;background:#fff;color:#1B1F2A;border-radius:10px;padding:8px 14px;font-size:13px;cursor:pointer">Close</button>
+                </div>
+              </sc-if>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8F9C">ref {{ prop.id }} · check {{ prop.hash }} · goal v{{ prop.goalVersion }}</div>
+            </div>
+          </sc-if>
+        </section>
+
+        <footer style="display:flex;flex-direction:column;gap:8px;padding-top:24px;border-top:1px solid #E4DFD3;font-size:13px;color:#5A6070;line-height:1.55">
+          <div style="font-weight:600;color:#1B1F2A">What this is based on</div>
+          <sc-for list="{{ assumptions }}" as="a" hint-placeholder-count="2">
+            <div>{{ a }}</div>
+          </sc-for>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8F9C">snapshot {{ snapshotLabel }} v{{ snapVersion }} · as of {{ asOfLabel }} · {{ modeLabel }}</div>
+        </footer>
+      </div>
+    </sc-if>
+  </main>
+
+  <!-- TERM POPOVER -->
+  <sc-if value="{{ tipOpen }}" hint-placeholder-val="{{ false }}">
+    <div onMouseEnter="{{ keepTip }}" onMouseLeave="{{ hideTip }}" style="position:fixed;z-index:70;left:{{ tip.x }};top:{{ tip.y }};transform:{{ tip.transform }};width:320px;max-width:calc(100vw - 24px);background:#fff;border:1px solid #D9D2C2;border-radius:14px;box-shadow:0 12px 32px rgba(27,31,42,.16);padding:16px;display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:16px;font-weight:600">{{ tip.title }}</div>
+      <div style="font-size:14px;line-height:1.5;color:#3A3F4C;text-wrap:pretty">{{ tip.def }}</div>
+      <sc-if value="{{ tip.hasValue }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:4px;padding:10px 12px;background:#F6F3EC;border-radius:10px">
+          <div style="font-size:11px;font-weight:600;letter-spacing:.04em;color:#5A6070">YOUR NUMBER</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:500">{{ tip.value }}</div>
+          <sc-if value="{{ tip.how }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:13px;color:#5A6070;line-height:1.45">{{ tip.how }}</div>
+          </sc-if>
+          <div style="font-size:11px;color:#8A8F9C">{{ tip.source }}</div>
         </div>
       </sc-if>
-    </main>
-  </div>
+      <button onClick="{{ askTip }}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;border:0;background:#1F6B52;color:#fff;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:600;cursor:pointer;text-align:left" style-hover="background:#174F3D">
+        <span>Ask Sidekick about this</span><span>→</span>
+      </button>
+      <div style="font-size:11px;color:#8A8F9C">Definition from the NextMove glossary, not AI.</div>
+    </div>
+  </sc-if>
+
+  <!-- SIDEKICK DRAWER -->
+  <aside data-screen-label="Sidekick" style="position:fixed;z-index:50;top:0;right:0;bottom:0;width:400px;max-width:100vw;background:#FBF9F4;border-left:1px solid #E4DFD3;box-shadow:-16px 0 40px rgba(27,31,42,.10);display:flex;flex-direction:column;transform:{{ sideTransform }};transition:transform .25s ease">
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid #E4DFD3">
+      <span style="width:10px;height:10px;border-radius:50%;background:#1F6B52"></span>
+      <span style="font-size:17px;font-weight:600">Sidekick</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.06em;padding:3px 7px;border-radius:4px;background:{{ sideStatus.bg }};color:{{ sideStatus.fg }}">{{ sideStatus.label }}</span>
+      <span style="flex:1"></span>
+      <button onClick="{{ toggleSide }}" style="border:0;background:transparent;font-size:20px;line-height:1;color:#5A6070;cursor:pointer;padding:4px 8px" aria-label="Close">×</button>
+    </div>
+    <div ref="{{ sideBodyRef }}" style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px">
+      <sc-if value="{{ threadEmpty }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="font-size:15px;line-height:1.55;color:#1B1F2A;text-wrap:pretty">I can check whether a payment fits your plan. You can also tap any highlighted word or number on the page and ask me about it.</div>
+          <div style="font-size:13px;line-height:1.5;color:#5A6070">I work only with your snapshot. The math comes from NextMove's calculator, and I can't approve or change anything.</div>
+          <div style="display:flex;flex-direction:column;gap:6px;padding-top:4px">
+            <sc-for list="{{ sideSuggestions }}" as="s" hint-placeholder-count="2">
+              <button onClick="{{ s.pick }}" style="text-align:left;border:1px solid #E4DFD3;background:#fff;border-radius:10px;padding:10px 12px;font-size:14px;color:#1B1F2A;cursor:pointer" style-hover="background:#F1EDE3">{{ s.text }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+      <sc-for list="{{ thread }}" as="t" hint-placeholder-count="0">
+        <div style="display:flex;flex-direction:column;animation:nmpop .2s ease-out">
+          <sc-if value="{{ t.isUser }}" hint-placeholder-val="{{ false }}">
+            <div style="align-self:flex-end;max-width:85%;padding:10px 14px;background:#1F6B52;color:#fff;border-radius:14px 14px 4px 14px;font-size:14px;line-height:1.45">{{ t.text }}</div>
+          </sc-if>
+          <sc-if value="{{ t.isGlossary }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:12px 14px;background:#fff;border:1px solid #E4DFD3;border-radius:12px;display:flex;flex-direction:column;gap:6px">
+              <div style="font-size:11px;font-weight:600;letter-spacing:.04em;color:#5A6070">NEXTMOVE GLOSSARY · NOT AI</div>
+              <div style="font-size:15px;font-weight:600">{{ t.title }}</div>
+              <div style="font-size:14px;line-height:1.5;color:#3A3F4C">{{ t.def }}</div>
+              <sc-if value="{{ t.value }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:13px;color:#5A6070">Your number: <span style="font-family:'IBM Plex Mono',monospace;color:#1B1F2A">{{ t.value }}</span> <span>{{ t.how }}</span></div>
+              </sc-if>
+            </div>
+          </sc-if>
+          <sc-if value="{{ t.isPending }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#5A6070;padding:4px 0">
+              <div style="width:12px;height:12px;border:2px solid #CFC8B8;border-top-color:#1F6B52;border-radius:50%;animation:nmspin .8s linear infinite"></div>Thinking… this can take up to 45 seconds.
+            </div>
+          </sc-if>
+          <sc-if value="{{ t.isError }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:10px 12px;background:#F9E3DF;color:#A3261B;border-radius:10px;font-size:13px;display:flex;flex-direction:column;gap:2px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-weight:600">{{ t.code }}</span><span>{{ t.text }}</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{ t.isReceipt }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:14px;background:#fff;border:1px solid #E4DFD3;border-radius:4px 14px 14px 14px;display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.06em;padding:3px 7px;border-radius:4px;background:{{ t.sbg }};color:{{ t.sfg }}">{{ t.statusLabel }}</span>
+                <span style="font-size:11px;color:#8A8F9C">{{ t.provenance }}</span>
+              </div>
+              <div style="font-size:15px;line-height:1.5;text-wrap:pretty">{{ t.summary }}</div>
+              <sc-if value="{{ t.hasScenarios }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column">
+                  <sc-for list="{{ t.scenarios }}" as="r" hint-placeholder-count="0">
+                    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:8px 0;border-top:1px solid #F0ECE3;font-size:13px">
+                      <span style="font-weight:600;width:76px">{{ r.key }}</span>
+                      <span style="font-family:'IBM Plex Mono',monospace">{{ r.min }}</span>
+                      <span style="color:#5A6070">{{ r.minDate }}</span>
+                      <span style="flex:1"></span>
+                      <span style="font-size:11px;font-weight:600;color:{{ r.pfg }}">{{ r.policy }}</span>
+                      <span style="font-size:11px;font-weight:600;color:#1F6B52">{{ r.selected }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ t.termNote }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:13px;color:#5A6070;line-height:1.5">Sidekick can't explain specific numbers yet. The glossary card above is the explanation for now.</div>
+              </sc-if>
+              <sc-if value="{{ t.suggestCompare }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ goWhatIf }}" style="align-self:flex-start;border:1px solid #CFC8B8;background:#fff;color:#1B1F2A;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:#F1EDE3">Try a payment on the page</button>
+              </sc-if>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+    <div style="padding:14px 16px;border-top:1px solid #E4DFD3;display:flex;flex-direction:column;gap:8px;background:#fff">
+      <textarea value="{{ sideMsg }}" onChange="{{ setSideMsg }}" onKeyDown="{{ sideKey }}" maxlength="2000" rows="2" placeholder="Ask about a payment…" style="border:1px solid #CFC8B8;border-radius:10px;outline:none;resize:none;padding:10px 12px;font-size:15px;line-height:1.45;color:#1B1F2A;background:#fff"></textarea>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;color:#8A8F9C">Can't approve or move money.</span>
+        <span style="flex:1"></span>
+        <button onClick="{{ sendSide }}" disabled="{{ sideLoading }}" style="border:0;background:#1F6B52;color:#fff;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#174F3D">Send</button>
+      </div>
+    </div>
+  </aside>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;dataMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;auto&quot;,&quot;live&quot;,&quot;recorded&quot;],&quot;default&quot;:&quot;auto&quot;,&quot;tsType&quot;:&quot;'auto'|'live'|'recorded'&quot;,&quot;section&quot;:&quot;Data&quot;},&quot;showAssumptions&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Display&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;dataMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;auto&quot;,&quot;live&quot;,&quot;recorded&quot;],&quot;default&quot;:&quot;auto&quot;,&quot;tsType&quot;:&quot;'auto'|'live'|'recorded'&quot;,&quot;section&quot;:&quot;Data&quot;},&quot;sidekickOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Sidekick&quot;}}">
 const daysFrom = start => { const out = []; for (let i = 0; i < 30; i++) { const d = new Date(start + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + i); out.push(d.toISOString().slice(0, 10)); } return out; };
 const addDays = (start, count) => { const d = new Date(start + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + count); return d.toISOString().slice(0, 10); };
 const REC_DAYS = daysFrom('2026-11-07');
@@ -547,46 +451,61 @@ const REC_SCEN = {
 };
 const REC_FIXTURE = { id: 'demo-v1', version: 1, asOf: '2026-11-07', quality: 'complete', mode: 'synthetic_fixture', openingCents: 120000, savingsCents: 60000, liabilitiesCents: 200000, cashFloorCents: 20000, essentialMonthlyCents: 100000, events: [{ id: 'rent', date: '2026-11-10', cents: -90000 }, { id: 'utility', date: '2026-11-11', cents: -10000 }, { id: 'paycheck', date: '2026-11-14', cents: 150000 }], assumptions: ASSUMPTIONS, forecast: REC_BASE, metrics: [{ id: 'net-worth', value: -20000, unit: 'cents' }, { id: 'emergency-coverage', value: 0.6, unit: 'months' }, { id: 'minimum-cash', value: 20000, unit: 'cents' }], findings: [{ id: 'buffer', severity: 'warning', title: 'Checking reaches your cash floor before payday', evidenceIds: ['rent', 'utility'] }, { id: 'coverage', severity: 'warning', title: 'Emergency savings cover 0.6 months of listed essentials', evidenceIds: ['savings'] }, { id: 'coverage-data', severity: 'info', title: 'Forecast includes only declared obligations', evidenceIds: [] }] };
 
-const ERR = {
-  SESSION_REQUIRED: 'Your demo session is missing or ended.',
-  STALE_SNAPSHOT: 'The snapshot changed. Refresh it and try again.',
-  RUN_ACTIVE: 'Another analysis is still running for this session.',
-  STALE_APPROVAL: 'This proposal expired or your goal changed. Create a new proposal.',
-  INVALID_REQUEST: 'The API rejected this request. Check the amount and date.',
-  NESSIE_KEY_MISSING: 'The saved Nessie key was not found. Restart the app so it reloads .env.',
-  NESSIE_AUTH_FAILED: 'Nessie rejected the saved key. Generate a current v2 key and save it again.',
-  NESSIE_RATE_LIMITED: 'Nessie is temporarily rate limiting requests. Wait a moment and retry.',
-  NESSIE_EMPTY: 'Nessie is connected, but this sandbox has no accounts yet.',
-  NESSIE_UNAVAILABLE: 'Nessie could not be reached. Check the connection and retry.',
-  NETWORK_ERROR: "Couldn't reach the API.",
-  NOT_FOUND: 'Not found for this session.',
-  NOT_RECORDED: 'No recorded response exists for this input. Connect the live API to try other values.',
-  MODEL_OR_VALIDATION_FAILURE: 'The assistant failed or returned output that did not pass validation. Nothing was changed.',
-  BAD_AMOUNT: 'Enter a dollar amount like 300 or 300.00.',
+const GLOSSARY = {
+  checking: { title: 'Checking account', def: 'The everyday account you spend from and pay bills with.' },
+  savings: { title: 'Savings', def: 'Money kept in a separate account and set aside for later. In this plan it isn’t used to pay bills automatically.' },
+  owe: { title: 'What you owe', def: 'Money you borrowed and still have to pay back, like a credit card balance. Also called debt.' },
+  networth: { title: 'What you’re worth', def: 'Everything you have minus everything you owe. Below zero means you owe more than you have. Also called net worth.' },
+  emergency: { title: 'Emergency savings', def: 'How many months your savings could pay your essential bills if your income suddenly stopped.' },
+  essentials: { title: 'Essential bills', def: 'Bills you have to pay every month, like rent and utilities.' },
+  cushion: { title: 'Safety cushion', def: 'The least you want to keep in checking, so a surprise cost doesn’t leave you short.' },
+  lowest: { title: 'Lowest balance ahead', def: 'The smallest amount your checking account will hold in the next 30 days, if your listed bills and income happen as planned.' },
+  forecast: { title: '30-day outlook', def: 'A day-by-day estimate of how much will be in your checking account, using only the bills and income you’ve listed.' },
+  extra: { title: 'Paying extra', def: 'Paying more than you have to on something you owe. You owe less sooner, but the money leaves checking right away.' },
+  goal: { title: 'Goal contribution', def: 'How much you plan to set aside for your savings goal. In NextMove this is a plan, not a transfer. Changing it moves no money.' },
 };
-const money = c => { if (c == null) return '—'; const neg = c < 0; const s = (Math.abs(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return (neg ? '−$' : '$') + s; };
+const ERR = {
+  SESSION_REQUIRED: 'Your demo session ended.', STALE_SNAPSHOT: 'Your numbers changed. Refresh and try again.', RUN_ACTIVE: 'Sidekick is still working on your last question.',
+  STALE_APPROVAL: 'This change expired or your plan changed. Start the change again.', INVALID_REQUEST: 'NextMove couldn’t use that. Check the amount and date.',
+  NESSIE_KEY_MISSING: 'The saved Nessie key was not found. Restart NextMove so it reloads .env.',
+  NESSIE_AUTH_FAILED: 'Nessie rejected the saved key.', NESSIE_RATE_LIMITED: 'Nessie is temporarily rate limiting requests.',
+  NESSIE_EMPTY: 'Nessie is connected, but this sandbox has no accounts.', NESSIE_UNAVAILABLE: 'Nessie could not be reached.',
+  NETWORK_ERROR: 'Couldn’t reach NextMove.', NOT_FOUND: 'Not found.',
+  NOT_RECORDED: 'This walkthrough only has recorded answers for the preset values. Connect the live service to try others.',
+  MODEL_OR_VALIDATION_FAILURE: 'Sidekick couldn’t produce an answer that passed NextMove’s checks. Nothing was changed.', BAD_AMOUNT: 'Enter an amount like 300 or 300.00.',
+};
+const NAMES = { rent: 'Rent', utility: 'Utilities', paycheck: 'Paycheck', payment: 'Your extra payment' };
+const money = c => { if (c == null) return '—'; const s = (Math.abs(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return (c < 0 ? '−$' : '$') + s; };
 const short = c => { const v = c / 100; const a = Math.abs(v); const s = a >= 1000 ? (a / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 }) + 'k' : String(a); return (v < 0 ? '−$' : '$') + s; };
-const day = iso => { const d = new Date(iso + 'T12:00:00Z'); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }); };
+const day = iso => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const toCents = str => { const t = String(str).trim().replace(/[$,]/g, ''); if (!/^\d+(\.\d{1,2})?$/.test(t)) return null; const [w, f = ''] = t.split('.'); const c = Number(w) * 100 + Number((f + '00').slice(0, 2)); return Number.isSafeInteger(c) ? c : null; };
-const errOf = (res, fallback) => { const code = res?.data?.error?.code || res?.data?.error || fallback || ('HTTP_' + res?.status); const rid = res?.data?.error?.requestId; return { code, text: (res?.data?.error?.message || ERR[code] || 'Request failed.') + (rid ? ' Request ' + rid.slice(0, 8) + '.' : '') }; };
+const errOf = (res, fallback) => { const code = res?.data?.error?.code || res?.data?.error || fallback || ('HTTP_' + res?.status); const rid = res?.data?.error?.requestId; return { code, text: (res?.data?.error?.message || ERR[code] || 'Something went wrong.') + (rid ? ' Ref ' + rid.slice(0, 8) + '.' : '') }; };
+// Display only: splits the API's month value into months + days, counting a month as 30 days.
+const duration = mo => { if (mo == null || !Number.isFinite(mo)) return null; let m = Math.floor(mo), d = Math.round((mo - m) * 30); if (d === 30) { m += 1; d = 0; } const pl = (n, w) => n + ' ' + w + (n === 1 ? '' : 's'); return m === 0 ? pl(d, 'day') : d === 0 ? pl(m, 'month') : pl(m, 'month') + ' ' + pl(d, 'day'); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+let tid = 0;
 
 class Component extends DCLogic {
-  state = { conn: 'connecting', mode: 'live', connErr: null, view: 'snapshot', snap: null, snapErr: null,
+  state = { conn: 'connecting', mode: 'live', connErr: null, snap: null, snapErr: null,
     scenAmount: '300', scenDate: '2026-11-07', scen: null, scenLoading: false, scenErr: null,
-    askMsg: '', run: null, runLoading: false, runErr: null,
-    propAmount: '100', proposal: null, propLoading: false, propErr: null, approved: false, approveLoading: false, approveErr: null, repeatNote: false,
-    syncLoading: false, syncErr: null, syncNotice: null, nessieVerified: false, recGoal: { amountCents: 30000, version: 1 }, recRuns: {}, recActions: {}, now: Date.now() };
+    propAmount: '100', proposal: null, propLoading: false, propErr: null, approved: false, approveLoading: false, approveErr: null,
+    syncLoading: false, syncErr: null, syncNotice: null, nessieVerified: false, recGoal: { amountCents: 30000, version: 1 }, recActions: {}, now: Date.now(),
+    tip: null, sideOpen: false, sideMsg: '', sideLoading: false, thread: [] };
+  whatIfRef = React.createRef();
+  sideBodyRef = React.createRef();
 
   componentDidMount() {
     this.tick = setInterval(() => { if (this.state.proposal && !this.state.approved) this.setState({ now: Date.now() }); }, 1000);
+    if (this.props.sidekickOpen) this.setState({ sideOpen: true });
     this.start();
   }
-  componentWillUnmount() { clearInterval(this.tick); }
-  componentDidUpdate(pp) { if (pp.dataMode !== this.props.dataMode) this.start(); }
+  componentWillUnmount() { clearInterval(this.tick); clearTimeout(this.hideT); }
+  componentDidUpdate(pp, ps) {
+    if (pp.dataMode !== this.props.dataMode) this.start();
+    if (ps.thread.length !== this.state.thread.length && this.sideBodyRef.current) { const el = this.sideBodyRef.current; setTimeout(() => { el.scrollTop = el.scrollHeight; }, 30); }
+  }
   start() { (this.props.dataMode ?? 'auto') === 'recorded' ? this.useRecorded() : this.connect(); }
-
-  reset(extra) { this.setState({ snap: null, snapErr: null, scen: null, scenErr: null, run: null, runErr: null, proposal: null, propErr: null, approved: false, approveErr: null, repeatNote: false, syncErr: null, syncNotice: null, ...extra }); }
+  reset(extra) { this.setState({ snap: null, snapErr: null, scen: null, scenErr: null, proposal: null, propErr: null, approved: false, approveErr: null, syncErr: null, syncNotice: null, thread: [], tip: null, ...extra }); }
 
   connect = async () => {
     this.reset({ conn: 'connecting', mode: 'live', connErr: null });
@@ -594,11 +513,10 @@ class Component extends DCLogic {
       const r = await fetch('/api/v1/demo-session', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' });
       let data; try { data = await r.json(); } catch { throw Error('API_NOT_FOUND'); }
       if (r.status !== 201 || data.mode !== 'synthetic_fixture') throw Error(data?.error?.code || 'HTTP_' + r.status);
-      this.setState({ conn: 'ready' });
-      this.loadSnapshot();
+      this.setState({ conn: 'ready' }); this.loadSnapshot();
     } catch (e) { this.setState({ conn: 'unreachable', connErr: e.message === 'Failed to fetch' ? 'NETWORK_ERROR' : e.message }); }
   };
-  useRecorded = () => { this.reset({ conn: 'ready', mode: 'recorded', recGoal: { amountCents: 30000, version: 1 }, recRuns: {}, recActions: {}, scenAmount: '300', propAmount: '100' }); setTimeout(() => this.loadSnapshot(), 0); };
+  useRecorded = () => { this.reset({ conn: 'ready', mode: 'recorded', recGoal: { amountCents: 30000, version: 1 }, recActions: {}, scenAmount: '300', propAmount: '100' }); setTimeout(() => this.loadSnapshot(), 0); };
 
   async api(method, path, body) {
     if (this.state.mode === 'recorded') { await sleep(350); return this.replay(method, path, body); }
@@ -608,12 +526,11 @@ class Component extends DCLogic {
       return { ok: r.ok, status: r.status, data };
     } catch { return { ok: false, status: 0, data: { error: { code: 'NETWORK_ERROR' } } }; }
   }
-
   replay(method, path, body) {
     const S = this.state;
     if (method === 'GET' && path === '/snapshot') return { ok: true, status: 200, data: { ...REC_FIXTURE, goal: { ...S.recGoal } } };
     if (method === 'POST' && path === '/scenarios') { const c = body.changes[0]; const s = c.amountCents === 30000 && REC_SCEN[c.date]; return s ? { ok: true, status: 200, data: { baseline: REC_BASE, scenario: s } } : { ok: false, status: 400, data: { error: { code: 'NOT_RECORDED' } } }; }
-    if (method === 'POST' && path === '/runs') { const runId = 'rec-' + Math.random().toString(16).slice(2, 10); const out = { runId, status: 'completed', receipt: { status: 'needs_information', provenance: { mode: 'deterministic', model: null }, summary: 'AI is not configured. Use the scenario endpoint to compare an explicit payment.', trace: [], actionId: null } }; this.setState(s => ({ recRuns: { ...s.recRuns, [runId]: out } })); return { ok: true, status: 200, data: out }; }
+    if (method === 'POST' && path === '/runs') return { ok: true, status: 200, data: { runId: 'rec-' + Math.random().toString(16).slice(2, 10), status: 'completed', receipt: { status: 'needs_information', provenance: { mode: 'deterministic', model: null }, summary: 'AI is not configured. Use the scenario endpoint to compare an explicit payment.', trace: [], actionId: null } } };
     if (method === 'POST' && path === '/actions') { if (body.amountCents !== 10000 || S.recGoal.amountCents !== 30000) return { ok: false, status: 400, data: { error: { code: 'NOT_RECORDED' } } }; const id = 'rec-action-' + Math.random().toString(16).slice(2, 10); const a = { id, proposalHash: 'recorded-' + id.slice(-8) + '0000', expectedGoalVersion: S.recGoal.version, snapshotVersion: 1, expires: Date.now() + 300000, oldAmountCents: S.recGoal.amountCents, newAmountCents: 10000, effect: 'Changes an unscheduled app goal only; no funds move.' }; this.setState(s => ({ recActions: { ...s.recActions, [id]: { ...a, status: 'proposed' } } })); return { ok: true, status: 201, data: a }; }
     const m = /^\/actions\/([^/]+)\/approve$/.exec(path);
     if (method === 'POST' && m) { const a = S.recActions[m[1]]; if (!a) return { ok: false, status: 404, data: { error: { code: 'NOT_FOUND' } } }; if (a.status === 'completed') return { ok: true, status: 200, data: { id: a.id, status: 'completed' } }; if (a.expires < Date.now() || body.expectedGoalVersion !== S.recGoal.version) return { ok: false, status: 409, data: { error: { code: 'STALE_APPROVAL' } } }; this.setState(s => ({ recGoal: { amountCents: a.newAmountCents, version: s.recGoal.version + 1 }, recActions: { ...s.recActions, [a.id]: { ...a, status: 'completed' } } })); return { ok: true, status: 200, data: { id: a.id, status: 'completed' } }; }
@@ -621,10 +538,7 @@ class Component extends DCLogic {
     return { ok: false, status: 404, data: { error: { code: 'NOT_FOUND' } } };
   }
 
-  loadSnapshot = async () => {
-    const r = await this.api('GET', '/snapshot');
-    if (r.ok) this.setState({ snap: r.data, snapErr: null }); else this.setState({ snapErr: errOf(r) });
-  };
+  loadSnapshot = async () => { const r = await this.api('GET', '/snapshot'); this.setState(r.ok ? { snap: r.data, snapErr: null, scenDate: r.data.asOf } : { snapErr: errOf(r) }); };
 
   runScenario = async (dateOverride) => {
     const date = typeof dateOverride === 'string' ? dateOverride : this.state.scenDate;
@@ -636,38 +550,77 @@ class Component extends DCLogic {
     this.setState(r.ok ? { scenLoading: false, scen: { ...r.data, amountCents, date } } : { scenLoading: false, scen: null, scenErr: errOf(r) });
   };
 
-  sendRun = async () => {
-    const s = this.state.snap; const message = this.state.askMsg.trim();
-    if (!s || !message) return;
-    this.setState({ runLoading: true, runErr: null, run: null });
-    const r = await this.api('POST', '/runs', { snapshotId: s.id, snapshotVersion: s.version, message });
-    if (!r.ok) return this.setState({ runLoading: false, runErr: errOf(r) });
-    this.setState({ runLoading: false, run: r.data, runErr: r.data.status === 'failed' ? errOf({ data: { error: r.data.error } }) : null });
-  };
-
   propose = async () => {
     const amountCents = toCents(this.state.propAmount);
     if (amountCents == null) return this.setState({ propErr: errOf(null, 'BAD_AMOUNT') });
-    this.setState({ propLoading: true, propErr: null, proposal: null, approved: false, approveErr: null, repeatNote: false });
+    this.setState({ propLoading: true, propErr: null, proposal: null, approved: false, approveErr: null });
     const r = await this.api('POST', '/actions', { amountCents });
     this.setState(r.ok ? { propLoading: false, proposal: r.data } : { propLoading: false, propErr: errOf(r) });
   };
   approve = async () => {
     const p = this.state.proposal; if (!p) return;
-    const repeat = this.state.approved;
     this.setState({ approveLoading: true, approveErr: null });
     const r = await this.api('POST', '/actions/' + p.id + '/approve', { proposalHash: p.proposalHash, expectedGoalVersion: p.expectedGoalVersion, snapshotVersion: p.snapshotVersion });
-    if (r.ok && r.data.status === 'completed') { this.setState({ approveLoading: false, approved: true, repeatNote: repeat }); setTimeout(() => this.loadSnapshot(), 0); }
+    if (r.ok && r.data.status === 'completed') { this.setState({ approveLoading: false, approved: true }); setTimeout(() => this.loadSnapshot(), 0); }
     else this.setState({ approveLoading: false, approveErr: errOf(r) });
   };
-  discard = () => this.setState({ proposal: null, approveErr: null });
+  discard = () => this.setState({ proposal: null, approved: false, approveErr: null });
 
   trySync = async () => {
     this.setState({ syncLoading: true, syncErr: null, syncNotice: null });
     const r = await this.api('POST', '/sync', {});
-    if(r.ok&&r.data.empty)return this.setState({syncLoading:false,syncErr:null,syncNotice:r.data.message,nessieVerified:true});
-    this.setState(r.ok ? { syncLoading: false, syncErr: null, syncNotice: null, nessieVerified: true, snap: r.data.snapshot, scenDate: r.data.snapshot.asOf, scen: null, run: null } : { syncLoading: false, nessieVerified: false, syncErr: errOf(r) });
+    if(r.ok&&r.data.empty)return this.setState({syncLoading:false,nessieVerified:true,syncNotice:r.data.message});
+    this.setState(r.ok ? {syncLoading:false,nessieVerified:true,syncErr:null,snap:r.data.snapshot,scenDate:r.data.snapshot.asOf,scen:null,syncNotice:null} : {syncLoading:false,nessieVerified:false,syncErr:errOf(r)});
   };
+
+  // term popover
+  showTip = e => {
+    const id = e.currentTarget.dataset.term; if (!GLOSSARY[id]) return;
+    clearTimeout(this.hideT);
+    const r = e.currentTarget.getBoundingClientRect(); const W = 320;
+    const x = Math.max(12, Math.min(window.innerWidth - W - 12, r.left + r.width / 2 - W / 2));
+    const below = r.bottom + 290 < window.innerHeight;
+    this.setState({ tip: { id, x, y: below ? r.bottom + 8 : r.top - 8, up: !below } });
+  };
+  hideTip = () => { clearTimeout(this.hideT); this.hideT = setTimeout(() => this.setState({ tip: null }), 180); };
+  keepTip = () => clearTimeout(this.hideT);
+
+  detail(id) {
+    const s = this.state.snap; if (!s) return null; const scen = this.state.scen;
+    const m = k => s.metrics.find(x => x.id === k)?.value; const goal = s.goal;
+    return {
+      checking: { value: money(s.openingCents) },
+      savings: { value: money(s.savingsCents) },
+      owe: { value: money(s.liabilitiesCents) },
+      networth: { value: money(m('net-worth')), how: `${money(s.openingCents)} checking + ${money(s.savingsCents)} savings − ${money(s.liabilitiesCents)} owed` },
+      emergency: { value: duration(m('emergency-coverage')), how: `${money(s.savingsCents)} in savings compared with ${money(s.essentialMonthlyCents)} of essential bills a month. Days count a month as 30 days.` },
+      essentials: { value: money(s.essentialMonthlyCents) + ' a month' },
+      cushion: { value: money(s.cashFloorCents) },
+      lowest: scen ? { value: money(scen.scenario.minCashCents) + ' on ' + day(scen.scenario.minCashDate), how: `If you pay ${money(scen.amountCents)} on ${day(scen.date)}.` } : { value: money(s.forecast.minCashCents) + ' on ' + day(s.forecast.minCashDate), how: 'Without any extra payments.' },
+      forecast: { value: null },
+      extra: { value: scen ? money(scen.amountCents) + ' on ' + day(scen.date) : null, how: scen ? 'The payment you’re trying out.' : null },
+      goal: { value: goal ? money(goal.amountCents) : null },
+    }[id];
+  }
+
+  pushThread = items => { const keyed = items.map(i => ({ key: ++tid, ...i })); this.setState(s => ({ thread: [...s.thread, ...keyed] })); return keyed; };
+  ask = async (message, context, termId) => {
+    const s = this.state.snap; if (!s || !message || this.state.sideLoading) return;
+    const items = [{ type: 'user', text: message }];
+    if (termId) { const g = GLOSSARY[termId], d = this.detail(termId); items.push({ type: 'glossary', title: g.title, def: g.def, value: d?.value || '', how: d?.how || '' }); }
+    items.push({ type: 'pending' });
+    const pendingKey = this.pushThread(items).pop().key;
+    this.setState({ sideLoading: true, sideMsg: '' });
+    const r = await this.api('POST', '/runs', { snapshotId: s.id, snapshotVersion: s.version, message, ...(context ? { context } : {}) });
+    const out = !r.ok ? { type: 'error', ...errOf(r) } : r.data.status === 'failed' ? { type: 'error', ...errOf({ data: { error: r.data.error } }) } : { type: 'receipt', run: r.data, termId };
+    this.setState(st => ({ sideLoading: false, thread: st.thread.map(t => t.key === pendingKey ? { key: pendingKey, ...out } : t) }));
+  };
+  askTip = () => {
+    const id = this.state.tip?.id; if (!id) return; const g = GLOSSARY[id]; const d = this.detail(id);
+    this.setState({ tip: null, sideOpen: true });
+    this.ask(`What does “${g.title}” mean for me?`, { term: id, displayedValue: d?.value || null }, id);
+  };
+  sendSide = () => this.ask(this.state.sideMsg.trim());
 
   chart(main, base, floor, payment) {
     const days = daysFrom(main.dailyCash[0]?.date || this.state.snap?.asOf || '2026-11-07');
@@ -678,12 +631,10 @@ class Component extends DCLogic {
     while ((main.minCashCents - lo) / (hi - lo) * 260 < 66) lo -= step;
     const y = v => 200 - (v - lo) / (hi - lo) * 200; const W = 600 / 30;
     const path = dc => dc.map((d, i) => (i === 0 ? `M0 ${y(d.balanceCents)}` : `V${y(d.balanceCents)}`) + ` H${(i + 1) * W}`).join(' ');
-    const idx = date => days.indexOf(date);
-    const X = date => ((idx(date) + 0.5) / 30 * 100);
+    const X = date => ((days.indexOf(date) + 0.5) / 30 * 100);
     const pct = v => (y(v) / 2) + '%';
     const eod = date => main.dailyCash.find(d => d.date === date)?.balanceCents;
     const yLabels = []; for (let v = lo; v <= hi; v += step) yLabels.push({ top: pct(v), label: short(v) });
-    const NAMES = { rent: 'Rent', utility: 'Utilities', paycheck: 'Paycheck', payment: 'Your extra payment' };
     const evs = [...(this.state.snap?.events || [])]; if (payment) evs.push({ id: 'payment', date: payment.date, cents: -payment.amountCents });
     evs.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.cents - b.cents);
     const color = e => e.id === 'payment' ? '#2A2350' : e.cents > 0 ? '#1F6B52' : '#5A6070';
@@ -692,92 +643,93 @@ class Component extends DCLogic {
     const blocked = main.policy === 'blocked'; const atFloor = main.minCashCents === floor;
     const tone = blocked ? '#A3261B' : atFloor ? '#C07A12' : '#1F6B52';
     const minX = X(main.minCashDate); const onLine = eod(main.minCashDate) === main.minCashCents;
-    const dots = onLine ? [] : [{ left: minX + '%', top: pct(main.minCashCents), color: tone }];
     const start = main.dailyCash[0];
     const callouts = [
-      { text: 'Today', value: money(start.balanceCents), color: '#5A6070', left: X(start.date) + '%', top: pct(start.balanceCents), transform: 'translate(-12px, calc(-100% - 14px))' },
-      { text: onLine ? 'Lowest point · ' + day(main.minCashDate) : 'Lowest, during ' + day(main.minCashDate), value: money(main.minCashCents), color: tone, left: minX + '%', top: pct(main.minCashCents), transform: minX < 12 ? 'translate(-12px, 16px)' : 'translate(-50%, 16px)' },
+      { term: 'checking', text: 'Today', value: money(start.balanceCents), color: '#5A6070', left: X(start.date) + '%', top: pct(start.balanceCents), transform: 'translate(-12px, calc(-100% - 14px))' },
+      { term: 'lowest', text: onLine ? 'Lowest point · ' + day(main.minCashDate) : 'Lowest, during ' + day(main.minCashDate), value: money(main.minCashCents), color: tone, left: minX + '%', top: pct(main.minCashCents), transform: minX < 12 ? 'translate(-12px, 16px)' : 'translate(-50%, 16px)' },
     ];
     const nextIn = evs.find(e => e.cents > 0 && e.date >= main.minCashDate);
     let headline, sub;
     if (!payment) {
       headline = blocked ? 'Checking drops below your safety cushion' : atFloor ? 'Money gets tight before more comes in' : 'Checking stays above your safety cushion';
-      sub = `Your lowest point is ${money(main.minCashCents)} on ${day(main.minCashDate)}` + (atFloor ? `, right at your ${money(floor)} cushion.` : '.') + (nextIn ? ` Next money in: ${NAMES[nextIn.id] || nextIn.id} ${money(nextIn.cents)} on ${day(nextIn.date)}.` : '');
+      sub = `Your lowest point is ${money(main.minCashCents)} on ${day(main.minCashDate)}` + (atFloor ? `, right at your ${money(floor)} safety cushion.` : '.') + (nextIn ? ` Next money in: ${NAMES[nextIn.id] || nextIn.id} ${money(nextIn.cents)} on ${day(nextIn.date)}.` : '');
     } else {
-      headline = blocked ? `Too tight to pay on ${day(payment.date)}` : `Fits your cushion on ${day(payment.date)}`;
+      headline = blocked ? `Too tight to pay on ${day(payment.date)}` : `Paying on ${day(payment.date)} fits your cushion`;
       sub = blocked ? `Paying ${money(payment.amountCents)} on ${day(payment.date)} would take checking down to ${money(main.minCashCents)} on ${day(main.minCashDate)}, below your ${money(floor)} safety cushion.` : `Paying ${money(payment.amountCents)} on ${day(payment.date)} keeps checking at or above your ${money(floor)} safety cushion. Lowest point: ${money(main.minCashCents)} on ${day(main.minCashDate)}.`;
     }
     return { headline, sub, toneColor: tone, mainColor: payment ? (blocked ? '#A3261B' : '#1F6B52') : '#1F6B52', mainLabel: payment ? 'With the payment' : 'Money in checking',
       mainPath: path(main.dailyCash), basePath: base ? path(base.dailyCash) : '', floorY: y(floor), zeroY: y(0), floorTop: pct(floor), yLabels,
-      xLabels: [0, 7, 14, 21, 29].map(i => ({ left: ((i + 0.5) / 30 * 100) + '%', label: day(days[i]) })), markers, legend, dots, callouts };
+      xLabels: [0, 7, 14, 21, 29].map(i => ({ left: ((i + 0.5) / 30 * 100) + '%', label: day(days[i]) })), markers, legend, callouts,
+      dots: onLine ? [] : [{ left: minX + '%', top: pct(main.minCashCents), color: tone }] };
   }
 
   renderVals() {
     const S = this.state; const s = S.snap; const rec = S.mode === 'recorded';
-    const go = v => () => this.setState({ view: v });
-    const pol = p => p === 'blocked' ? { label: 'BREACHES FLOOR', bg: '#F9E3DF', fg: '#A3261B' } : { label: 'WITHIN FLOOR', bg: '#E3F0EA', fg: '#174F3D' };
     const floor = s?.cashFloorCents ?? 20000;
-    const metric = id => s?.metrics?.find(m => m.id === id);
+    const metric = id => s?.metrics?.find(m => m.id === id)?.value;
     const nw = metric('net-worth'), cov = metric('emergency-coverage'), mc = metric('minimum-cash');
-    const metricCards = s ? [
-      { label: 'Net worth', value: money(nw?.value), color: nw?.value < 0 ? '#A3261B' : '#1B1F2A', note: 'Checking + savings − liabilities, listed accounts only' },
-      { label: 'Emergency coverage', value: cov?.value != null ? cov.value.toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' mo' : '—', color: '#1B1F2A', note: s.essentialMonthlyCents != null ? 'Savings vs. ' + money(s.essentialMonthlyCents) + '/mo listed essentials' : 'Not enough completed expense history to calculate coverage' },
-      { label: 'Lowest checking, 30 days', value: money(mc?.value), color: mc?.value <= floor ? '#9A5B00' : '#1B1F2A', note: (s.forecast ? 'On ' + day(s.forecast.minCashDate) + ' · ' : '') + (mc?.value === floor ? 'exactly at your floor' : mc?.value < floor ? 'below your floor' : 'above your floor') },
-    ] : [];
-    const sev = { warning: { bg: '#FBEFD9', fg: '#9A5B00' }, info: { bg: '#E6EDF5', fg: '#34506F' }, critical: { bg: '#F9E3DF', fg: '#A3261B' } };
-    const findings = (s?.findings || []).map(f => ({ ...f, sev: f.severity.toUpperCase(), ...(sev[f.severity] || sev.info), hasEvidence: f.evidenceIds.length > 0, evidence: f.evidenceIds }));
+    const covLabel = duration(cov) ?? '—';
+    const v = s ? {
+      checking: money(s.openingCents), savings: money(s.savingsCents), owe: money(s.liabilitiesCents),
+      networth: money(nw), networthColor: nw < 0 ? '#A3261B' : '#1B1F2A', networthLine: nw < 0 ? 'You owe more than you have right now.' : 'You have more than you owe.',
+      emergency: covLabel,
+      lowest: money(mc), lowestColor: mc < floor ? '#A3261B' : mc === floor ? '#9A5B00' : '#1B1F2A',
+      lowestLine: 'On ' + day(s.forecast.minCashDate) + (mc === floor ? ', right at your' : mc < floor ? ', below your' : ', above your'),
+    } : { checking: '…', savings: '…', owe: '…', networth: '…', emergency: '…', lowest: '…', lowestLine: '' };
+    const FCOPY = { buffer: 'Your checking gets down to your safety cushion before payday.', coverage: cov != null ? `Your emergency savings would pay your essential bills for ${covLabel}.` : null, 'coverage-data': 'This only includes the bills and income you’ve listed.' };
+    const findings = (s?.findings || []).map(f => ({ text: FCOPY[f.id] || f.title, kind: f.severity === 'warning' ? 'HEADS UP' : f.severity === 'critical' ? 'IMPORTANT' : 'GOOD TO KNOW', dot: f.severity === 'warning' ? '#9A5B00' : f.severity === 'critical' ? '#A3261B' : '#34506F', bg: f.severity === 'warning' ? '#FBEFD9' : f.severity === 'critical' ? '#F9E3DF' : '#E6EDF5' }));
 
-    const scen = S.scen; const scenColor = scen?.scenario.policy === 'blocked' ? '#A3261B' : '#1F6B52';
-    const scenCards = scen ? [
-      { title: 'Without payment', line: '#9AA0AC', border: '#E4DFD3', ...(p => ({ policy: p.label, pbg: p.bg, pfg: p.fg }))(pol(scen.baseline.policy)), min: money(scen.baseline.minCashCents), minColor: '#1B1F2A', minDate: day(scen.baseline.minCashDate), note: 'Declared obligations only.' },
-      { title: money(scen.amountCents) + ' on ' + day(scen.date), line: scenColor, border: scen.scenario.policy === 'blocked' ? '#E7B3AB' : '#A9CDBE', ...(p => ({ policy: p.label, pbg: p.bg, pfg: p.fg }))(pol(scen.scenario.policy)), min: money(scen.scenario.minCashCents), minColor: scen.scenario.minCashCents < 0 ? '#A3261B' : '#1B1F2A', minDate: day(scen.scenario.minCashDate), note: scen.scenario.policy === 'blocked' ? 'Below your ' + money(scen.scenario.cashFloorCents) + ' floor.' : 'Stays at or above your ' + money(scen.scenario.cashFloorCents) + ' floor.' },
-    ] : [];
+    const scen = S.scen;
+    const empty = { yLabels: [], markers: [], dots: [], xLabels: [], legend: [], callouts: [], headline: 'Loading your outlook…', sub: '' };
+    const chart = !s ? empty : scen ? this.chart(scen.scenario, scen.baseline, floor, { date: scen.date, amountCents: scen.amountCents }) : this.chart(s.forecast, null, floor, null);
     const liveStart=s?.asOf||'2026-11-07';
-    const presets = s?.mode==='nessie_live' ? [[liveStart,'Today',day(liveStart)],[addDays(liveStart,7),'In 7 days',day(addDays(liveStart,7))],[addDays(liveStart,8),'In 8 days',day(addDays(liveStart,8))]] : [['2026-11-07', 'Today', 'Nov 7'], ['2026-11-14', 'Payday', 'Nov 14'], ['2026-11-15', 'After payday', 'Nov 15']];
+    const presets = s?.mode==='nessie_live' ? [[liveStart,'Today',day(liveStart)],[addDays(liveStart,7),'In 7 days',day(addDays(liveStart,7))],[addDays(liveStart,8),'In 8 days',day(addDays(liveStart,8))]] : [['2026-11-07', 'Today', 'Nov 7'], ['2026-11-14', 'Payday', 'Nov 14'], ['2026-11-15', 'Day after payday', 'Nov 15']];
     const datePresets = presets.map(([d, l, sub]) => ({ label: l, sub, pick: () => this.setState({ scenDate: d }), bg: S.scenDate === d ? '#E3F0EA' : '#fff', border: S.scenDate === d ? '#1F6B52' : '#CFC8B8' }));
 
-    const run = S.run; const rc = run?.receipt;
-    const receipt = rc ? {
-      runId: String(run.runId).slice(0, 8), summary: rc.summary,
-      statusLabel: rc.status === 'ready' ? 'READY' : 'NEEDS INFORMATION', sbg: rc.status === 'ready' ? '#E3F0EA' : '#FBEFD9', sfg: rc.status === 'ready' ? '#174F3D' : '#9A5B00',
-      provenance: (rc.provenance?.mode === 'live' ? 'live model ' + rc.provenance.model : 'deterministic, no model') + (rec ? ' · recorded' : ''),
-      hasScenarios: !!rc.scenarios, scenarios: rc.scenarios ? Object.entries(rc.scenarios).map(([k, v]) => ({ key: k, min: money(v.minCashCents), minDate: day(v.minCashDate), policy: pol(v.policy).label, pbg: pol(v.policy).bg, pfg: pol(v.policy).fg, selected: rc.selected === k ? 'Selected' : '' })) : [],
-      hasTrace: (rc.trace || []).length > 0, trace: (rc.trace || []).map(t => t.tool + (t.purpose ? ' (' + t.purpose + ')' : '')),
-      suggestCompare: rc.status === 'needs_information' && rc.provenance?.mode === 'deterministic',
-    } : null;
-
     const p = S.proposal; const left = p ? Math.max(0, p.expires - S.now) : 0;
-    const prop = p ? { heading: S.approved ? 'Approved change' : 'Review and approve', old: money(p.oldAmountCents), new: money(p.newAmountCents), effect: p.effect, id: String(p.id).slice(0, 8), hash: String(p.proposalHash).slice(0, 12) + '…', goalVersion: p.expectedGoalVersion, snapVersion: p.snapshotVersion,
-      expiry: S.approved ? 'completed' : left > 0 ? 'expires in ' + Math.floor(left / 60000) + ':' + String(Math.floor(left / 1000) % 60).padStart(2, '0') : 'expired',
+    const prop = p ? { heading: S.approved ? 'Change approved' : 'Check this change, then approve', old: money(p.oldAmountCents), new: money(p.newAmountCents), effect: p.effect, id: String(p.id).slice(0, 8), hash: String(p.proposalHash).slice(0, 10), goalVersion: p.expectedGoalVersion,
+      expiry: S.approved ? '' : left > 0 ? 'Offer expires in ' + Math.floor(left / 60000) + ':' + String(Math.floor(left / 1000) % 60).padStart(2, '0') : 'Expired. Start again.',
       pending: !S.approved, done: S.approved, border: S.approved ? '#1F6B52' : '#1B1F2A' } : null;
 
-    const navItems = [['snapshot', 'Snapshot', 'Balances & forecast'], ['compare', 'Compare', 'Extra payment check'], ['ask', 'Ask', 'Assistant'], ['goal', 'Goal', 'Contribution']].map(([v, label, sub]) => ({ label, sub, go: go(v), bg: S.view === v ? '#ECE7DB' : 'transparent' }));
+    const T = S.tip; let tip = {};
+    if (T) { const g = GLOSSARY[T.id], d = this.detail(T.id); tip = { title: g.title, def: g.def, hasValue: !!d?.value, value: d?.value, how: d?.how || '', source: 'From your snapshot · as of ' + (s ? day(s.asOf) : '') + (rec ? ' · recorded' : ''), x: T.x + 'px', y: T.y + 'px', transform: T.up ? 'translateY(-100%)' : 'none' }; }
+
+    const lastReceipt = [...S.thread].reverse().find(t => t.type === 'receipt');
+    const sideStatus = rec ? { label: 'RECORDED', bg: '#ECE8F8', fg: '#2A2350' } : lastReceipt?.run.receipt?.provenance?.mode === 'deterministic' ? { label: 'AI NOT CONFIGURED', bg: '#FBEFD9', fg: '#9A5B00' } : lastReceipt?.run.receipt?.provenance?.mode === 'live' ? { label: 'LIVE AI', bg: '#E3F0EA', fg: '#174F3D' } : { label: 'READY', bg: '#ECE7DB', fg: '#5A6070' };
+    const pol = x => x === 'blocked' ? { label: 'Too tight', fg: '#A3261B' } : { label: 'Fits', fg: '#1F6B52' };
+    const thread = S.thread.map(t => {
+      const base = { key: t.key, isUser: t.type === 'user', isGlossary: t.type === 'glossary', isPending: t.type === 'pending', isError: t.type === 'error', isReceipt: t.type === 'receipt', text: t.text, code: t.code, title: t.title, def: t.def, value: t.value, how: t.how };
+      if (t.type !== 'receipt') return base;
+      const rc = t.run.receipt || {};
+      return { ...base, summary: rc.summary, statusLabel: rc.status === 'ready' ? 'ANSWER' : 'NEEDS MORE INFO', sbg: rc.status === 'ready' ? '#E3F0EA' : '#FBEFD9', sfg: rc.status === 'ready' ? '#174F3D' : '#9A5B00',
+        provenance: (rc.provenance?.mode === 'live' ? 'Live model ' + rc.provenance.model : 'Automatic reply, no AI') + (rec ? ' · recorded' : ''),
+        hasScenarios: !!rc.scenarios, scenarios: rc.scenarios ? Object.entries(rc.scenarios).map(([k, sc]) => ({ key: k, min: money(sc.minCashCents), minDate: 'lowest ' + day(sc.minCashDate), policy: pol(sc.policy).label, pfg: pol(sc.policy).fg, selected: rc.selected === k ? '· picked' : '' })) : [],
+        termNote: !!t.termId, suggestCompare: rc.status === 'needs_information' && rc.provenance?.mode === 'deterministic' };
+    });
 
     return {
-      modeLabel: S.conn !== 'ready' ? 'not connected' : rec ? 'Recorded responses' : s?.mode === 'nessie_live' ? 'Live Nessie v2 · /api/v1' : 'Live local API · /api/v1',
-      dataBadge: s?.mode === 'nessie_live' ? 'NESSIE V2 SANDBOX' : 'SYNTHETIC DEMO DATA',
-      dataDescription: s?.mode === 'nessie_live' ? `Sandbox snapshot v${s.version} · as of ${day(s.asOf)}, ${new Date(s.asOf+'T12:00:00Z').getUTCFullYear()}. No real bank is connected and no real money moves.` : 'Fixture demo-v1 · version 1 · as of Nov 7, 2026. No bank is connected and no money moves.',
-      navItems, trySync: this.trySync, bankConnection: s?.mode === 'nessie_live' ? `Connected · ${s.provider.accounts} accounts` : S.nessieVerified ? 'Connected · sandbox empty' : 'Not connected', syncBtnLabel: S.syncLoading ? 'Connecting…' : s?.mode === 'nessie_live' ? 'Refresh Nessie' : S.nessieVerified ? 'Check Nessie again' : 'Connect bank (Nessie)', syncErr: S.syncErr, syncNotice: S.syncNotice,
+      modeLabel: S.conn !== 'ready' ? 'not connected' : rec ? 'recorded responses' : s?.mode==='nessie_live' ? 'live Nessie v2' : 'live local API',
+      dataBadge: s?.mode==='nessie_live' ? 'NESSIE V2 · SANDBOX DATA' : 'DEMO · MADE-UP NUMBERS',
+      trySync: this.trySync, dismissSync: () => this.setState({ syncErr: null }), syncBtnLabel: S.syncLoading ? 'Checking…' : s?.mode==='nessie_live' ? `Nessie · ${s.provider.accounts} accounts` : S.nessieVerified ? 'Nessie · sandbox empty' : 'Connect Nessie', syncErr: S.syncErr, syncNotice: S.syncNotice,
+      toggleSide: () => this.setState(st => ({ sideOpen: !st.sideOpen })), sideTransform: S.sideOpen ? 'translateX(0)' : 'translateX(105%)',
       isConnecting: S.conn === 'connecting', isUnreachable: S.conn === 'unreachable', isReady: S.conn === 'ready', connErrCode: S.connErr, connect: this.connect, useRecorded: this.useRecorded,
       isRecorded: rec, isLive: !rec, snapErr: S.snapErr,
-      isSnapshot: S.view === 'snapshot', isCompare: S.view === 'compare', isAsk: S.view === 'ask', isGoal: S.view === 'goal',
-      goCompare: go('compare'),
-      asOfLabel: s ? day(s.asOf) + ', ' + new Date(s.asOf+'T12:00:00Z').getUTCFullYear() : '…', snapQuality: s?.quality ?? '…', floorLabel: money(floor),
-      metricCards, findings, showAssumptions: this.props.showAssumptions ?? true, assumptions: s?.assumptions || [],
-      balances: s ? [['Checking', s.openingCents], ['Savings', s.savingsCents], ['Liabilities', s.liabilitiesCents], ['Cash floor', s.cashFloorCents], ['Essentials / month', s.essentialMonthlyCents]].map(([label, v]) => ({ label, value: money(v) })) : [],
-      events: (s?.events || []).map(e => ({ id: e.id, date: day(e.date), amount: (e.cents > 0 ? '+' : '') + money(e.cents), color: e.cents > 0 ? '#1F6B52' : '#1B1F2A' })),
-      snapChart: s ? this.chart(s.forecast, null, floor, null) : { yLabels: [], markers: [], dots: [], xLabels: [], legend: [], callouts: [] },
-      scenAmount: S.scenAmount, setScenAmount: e => this.setState({ scenAmount: e.target.value }), scenDate: S.scenDate, setScenDate: e => this.setState({ scenDate: e.target.value }),
-      datePresets, runScenario: this.runScenario, scenLoading: S.scenLoading, scenBtnLabel: S.scenLoading ? 'Comparing…' : 'Compare', scenErr: S.scenErr,
-      hasScen: !!scen, scenCards, scenLineColor: scenColor, cmpChart: scen ? this.chart(scen.scenario, scen.baseline, floor, { date: scen.date, amountCents: scen.amountCents }) : { yLabels: [], markers: [], dots: [], xLabels: [], legend: [], callouts: [] },
+      asOfLabel: s ? day(s.asOf) + ', ' + new Date(s.asOf+'T12:00:00Z').getUTCFullYear() : '…', snapshotLabel: s?.id ?? '—', snapVersion: s?.version ?? '—', floorLabel: money(floor),
+      v, findings, assumptions: s?.assumptions || [],
+      showTip: this.showTip, hideTip: this.hideTip, keepTip: this.keepTip, tipOpen: !!T, tip, askTip: this.askTip,
+      chart, whatIfRef: this.whatIfRef,
+      scenAmount: S.scenAmount, setScenAmount: e => this.setState({ scenAmount: e.target.value }), scenDate: S.scenDate, scenMin: liveStart, scenMax: addDays(liveStart,29), setScenDate: e => this.setState({ scenDate: e.target.value }),
+      datePresets, runScenario: this.runScenario, scenLoading: S.scenLoading, scenBtnLabel: S.scenLoading ? 'Checking…' : 'Check it', scenErr: S.scenErr,
+      hasScen: !!scen, clearScen: () => this.setState({ scen: null, scenErr: null }),
       scenBlocked: scen?.scenario.policy === 'blocked' && scen.date !== presets[2][0], tryDeferred: () => this.runScenario(presets[2][0]),
-      scenMeta: scen ? scen.scenario.snapshotId + ' v' + scen.scenario.snapshotVersion : '', scenEvidence: scen ? scen.scenario.evidenceIds.join(', ') : '',
-      askMsg: S.askMsg, setAskMsg: e => this.setState({ askMsg: e.target.value.slice(0, 2000) }), askCount: S.askMsg.length,
-      askSuggestions: ['Can I pay $300 extra toward my card today?', 'What if I pay $300 on Nov 15?'].map(t => ({ text: t, pick: () => this.setState({ askMsg: t }) })),
-      sendRun: this.sendRun, runLoading: S.runLoading, runBtnLabel: S.runLoading ? 'Running…' : 'Ask', runErr: S.runErr, hasReceipt: !!receipt, receipt: receipt || {},
-      goalLabel: money(s?.goal?.amountCents), goalVersion: s?.goal?.version ?? '—',
-      propAmount: S.propAmount, setPropAmount: e => this.setState({ propAmount: e.target.value }), propose: this.propose, propLoading: S.propLoading, propBtnLabel: S.propLoading ? 'Preparing…' : 'Prepare change', propErr: S.propErr,
-      hasProposal: !!prop, prop: prop || {}, approve: this.approve, approveLoading: S.approveLoading, approveBtnLabel: S.approveLoading ? 'Applying…' : 'Approve change', approveErr: S.approveErr, discard: this.discard, repeatNote: S.repeatNote,
+      goalLabel: money(s?.goal?.amountCents), noProposal: !prop, hasProposal: !!prop, prop: prop || {},
+      propAmount: S.propAmount, setPropAmount: e => this.setState({ propAmount: e.target.value }), propose: this.propose, propLoading: S.propLoading, propBtnLabel: S.propLoading ? 'Preparing…' : 'Review change', propErr: S.propErr,
+      approve: this.approve, approveLoading: S.approveLoading, approveBtnLabel: S.approveLoading ? 'Saving…' : 'Approve', approveErr: S.approveErr, discard: this.discard,
+      sideStatus, thread, threadEmpty: S.thread.length === 0, sideBodyRef: this.sideBodyRef,
+      sideSuggestions: ['Can I pay $300 extra toward my card today?', 'What if I pay $300 on Nov 15?'].map(t => ({ text: t, pick: () => this.ask(t) })),
+      sideMsg: S.sideMsg, setSideMsg: e => this.setState({ sideMsg: e.target.value.slice(0, 2000) }), sideKey: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendSide(); } },
+      sendSide: this.sendSide, sideLoading: S.sideLoading,
+      goWhatIf: () => { this.setState({ sideOpen: false }); const el = this.whatIfRef.current; if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 90, behavior: 'smooth' }); },
     };
   }
 }
