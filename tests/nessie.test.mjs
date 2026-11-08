@@ -17,7 +17,7 @@ test('Nessie mapping isolates one customer and produces a finance snapshot',asyn
    {id:'bill-a',account_id:'checking-a',status:'pending',upcoming_payment_date:today,payment_amount:75,payee:'Power'},
    {id:'bill-b',account_id:'checking-b',status:'pending',upcoming_payment_date:today,payment_amount:900,payee:'Other'},
   ],
-  '/loans':[{id:'loan-a',account_id:'card-a',amount_cents:30000},{id:'loan-b',account_id:'checking-b',amount_cents:800000}],
+  '/loans':[{id:'loan-a',account_id:'card-a',amount_cents:30000,status:'active'},{id:'loan-b',account_id:'checking-b',amount_cents:800000,status:'active'}],
   '/transactions':[
    {id:'tx-a',payer_id:'checking-a',payee_id:'merchant',status:'completed',kind:'purchase',amount_cents:500,created_at:now},
    {id:'tx-b',payer_id:'checking-b',payee_id:'merchant',status:'completed',kind:'purchase',amount_cents:80000,created_at:now},
@@ -26,13 +26,14 @@ test('Nessie mapping isolates one customer and produces a finance snapshot',asyn
  globalThis.fetch=async url=>{const path=new URL(url).pathname;return {ok:true,json:async()=>({items:data[path]||[]})};};
  try{
   const {loadNessieSnapshot}=await import('../backend/nessie.mjs?mapping-test');
-  const snapshot=await loadNessieSnapshot(7);
+  await assert.rejects(()=>loadNessieSnapshot(7),/CUSTOMER_REQUIRED/);
+  const snapshot=await loadNessieSnapshot(7,'customer-a');
   assert.equal(snapshot.mode,'nessie_live');
   assert.equal(snapshot.version,7);
   assert.equal(snapshot.openingCents,125000);
   assert.equal(snapshot.savingsCents,50000);
   assert.equal(snapshot.liabilitiesCents,50000);
-  assert.equal(snapshot.essentialMonthlyCents,500);
+  assert.equal(snapshot.essentialMonthlyCents,null);
   assert.equal(snapshot.provider.accounts,3);
   assert.equal(snapshot.provider.transactions,1);
   assert.deepEqual(snapshot.events.map(e=>e.id),['bill-a']);

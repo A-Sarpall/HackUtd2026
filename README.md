@@ -1,20 +1,45 @@
-# NextMove backend
+# NextMove Personal
 
-Local application with Claude’s supplied HTML prototype connected to the backend. Run with Node 22.13 or newer:
+Local personal finance app with Nessie sandbox data, NVIDIA Nemotron Sidekick, deterministic financial calculations, goal comparisons, and approved app changes.
 
-    npm test
-    npm run dev
+## Start
 
-Open http://127.0.0.1:3001 after starting. The same server serves both frontend and API; no separate proxy needed. If port 3001 is occupied, run `PORT=3002 npm run dev` and open http://127.0.0.1:3002. Listens only on loopback. SQLite persists local demo sessions, goals, approvals and audit. No installation dependencies. This initial implementation uses JavaScript modules and local SQLite to run without external credentials; the proposed TypeScript/Zod/Supabase architecture remains migration work. Do not expose this demo server to the public internet. Sessions are synthetic local demo sessions, not production authentication.
+Requires Node 22.13 or newer. No dependency installation is needed.
 
-Run `python3 scripts/setup_keys.py` to save provider keys privately in the ignored .env file. npm run dev loads .env automatically. Never put provider keys in frontend variables. NVIDIA calls are optional; without a key the API clearly reports AI unavailable. Nessie sync is explicitly unavailable pending verified mappings; backend/nessie-smoke.mjs provides a read-only connection check. No live integration has been verified.
+```sh
+python3 scripts/setup_keys.py
+npm run dev
+```
 
-Implemented: synthetic snapshot, three indicators, 30-day scenarios, conservative intra-day balance ordering, bounded two-call Nemotron plan/selection workflow, deterministic receipt numbers, cookie-scoped demo users, transactional goal contribution reduction and audit, repeat-safe action approval. Runs are synchronous and kept in memory. Goal changes are unscheduled app preferences, not bank transactions or forecast obligations.
+The server prints its local URL. The saved .env file is loaded automatically; it is excluded from Git along with SQLite files. The frontend and API share the same server.
 
-Tests cover financial numbers, invalid dates/money, isolation and repeated approvals. Remaining: full typed schemas, production authentication/authorization, real Nessie normalization, richer detector registry, contextual metric explanation, agent evaluations, request/session limits, persistent runs, production deployment. The code is a working foundation, not the completed specification.
+## Use
 
-See docs/FRONTEND-HANDOFF.md for the implemented contract. The safer demo payment occurs Nov 15, following payday; Nov 14 remains unsafe under conservative outflows-first ordering. This corrects the earlier plan's inconsistent same-day example.
+Open Data & goals to choose a Nessie sandbox customer and enter income, bills and goals; then compare a payment and ask Sidekick. Decision receipts include public role activity, verified scenarios, evidence and checks. A receipt can be linked to an explicitly approved contribution change.
 
-## Imported frontend
+Implemented workflow, five steps: Coordinator (AI) → Financial engine (code) → Verifier (code) → Strategist (AI) → Coach (AI). In Sidekick, "How it works" explains the steps, and "How this answer was made" shows the recorded steps behind each answer. One configured hosted Nemotron model serves all roles. No model training is required. Without a key, the app clearly reports AI unavailable and deterministic calculations remain available.
 
-Copied NextMove.dc.html and support.js from the supplied prototype; original Downloads files were not edited. The runtime loads pinned React/Babel assets from unpkg and fonts from Google, so first load requires internet. Imported SQLite data was not copied. Added narrow-screen layout adaptation and reused existing demo sessions across reloads. Browser-verified dashboard, rejected immediate payment, accepted Nov 15 alternative, approved app goal change and persistence after reload. Five automated tests pass, including page serving and session reuse.
+Nessie imports are read-only. The app never moves bank funds. Goal approval changes the first goal's ongoing contribution setting and records an audit entry.
+
+## Checks
+
+```sh
+npm test
+```
+
+For an authorized live sandbox end-to-end check against a running server:
+```sh
+NEXTMOVE_URL=http://127.0.0.1:3003 node scripts/verify_demo.mjs
+```
+
+## Deploy
+
+See [docs/DEPLOY.md](docs/DEPLOY.md) for the Docker image, required settings (`PUBLIC_ORIGIN`, persistent `/data`), security controls and known limits.
+
+Read [the implemented workflow](docs/IMPLEMENTED-WORKFLOW.md) for formulas, assumptions, supported routes and practical limits.
+
+## Scope
+
+The current stack is JavaScript modules, a Node server, SQLite, and the supplied Claude frontend/runtime. The original TypeScript/Next.js/Supabase architecture remains a future migration. This is a local demo using cookie-scoped sessions, not production user authentication. The frontend runtime uses external React/Babel assets and Google Fonts, so initial loading needs internet.
+
+Blank income, expense, loan, or goal inputs remain unknown. The forecast includes known dated events, not automatically inferred future income. Goal comparisons and loan results are explicitly assumption-based. No automatic financial categorization or production security certification is claimed.

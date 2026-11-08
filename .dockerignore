@@ -1,0 +1,9 @@
+.env
+.env.*
+*.sqlite*
+.git
+.DS_Store
+node_modules
+tests
+scripts
+docs
