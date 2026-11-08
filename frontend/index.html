@@ -45,7 +45,7 @@ input,button,select,textarea{font-family:inherit}
 @keyframes koinSurf{0%,100%{transform:translateY(0)}50%{transform:translateY(2.5px)}}
 </style>
 </helmet>
-<div data-theme="{{ theme }}" style="position:relative;width:{{ fitW }}px;height:{{ fitH }}px;transform:{{ fitT }};transform-origin:0 0;display:grid;grid-template-rows:76px minmax(0,1fr) 170px;background:var(--bg);color:var(--ink);overflow:hidden;transition:background .45s,color .45s">
+<div data-theme="{{ theme }}" style="position:relative;width:{{ fitW }}px;height:{{ fitH }}px;transform:{{ fitT }};transform-origin:0 0;display:grid;grid-template-rows:76px minmax(0,1fr) 128px;background:var(--bg);color:var(--ink);overflow:hidden;transition:background .45s,color .45s">
 
   <header data-screen-label="Top bar" style="display:flex;align-items:center;gap:0;padding:0 16px 0 14px;background:var(--surface);border-bottom:1px solid var(--line);transition:background .45s;z-index:20">
     <div style="display:flex;align-items:center;gap:10px;padding-right:20px">
@@ -56,7 +56,7 @@ input,button,select,textarea{font-family:inherit}
       </div>
     </div>
     <sc-for list="{{ metrics }}" as="m" hint-placeholder-count="4">
-      <div style="display:flex;flex-direction:column;gap:2px;padding:0 16px;border-left:1px solid var(--line);min-width:128px">
+      <div style="display:flex;flex-direction:column;gap:2px;padding:0 12px;border-left:1px solid var(--line);min-width:110px">
         <span data-term="{{ m.term }}" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" style="align-self:flex-start;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);border-bottom:1px dotted var(--muted);cursor:help;outline:none;white-space:nowrap">{{ m.label }}</span>
         <span style="font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:600;letter-spacing:-.03em;color:{{ m.tone }};white-space:nowrap">{{ m.valEl }}</span>
         <sc-if value="{{ m.dShow }}" hint-placeholder-val="{{ false }}"><span style="align-self:flex-start;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:{{ m.dBg }};color:{{ m.dTone }};white-space:nowrap;animation:koinPop .3s ease">{{ m.dText }}</span></sc-if>
@@ -68,13 +68,15 @@ input,button,select,textarea{font-family:inherit}
       <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 7px;border-radius:5px;background:{{ srcBadgeBg }};color:{{ srcBadgeFg }}">{{ srcBadge }}</span>
       <span style="font-size:11px;color:var(--muted);white-space:nowrap">As of {{ asOf }}</span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <button onClick="{{ openKip }}" style="display:flex;align-items:center;gap:8px;height:42px;padding:0 16px 0 5px;border:0;border-radius:999px;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;box-shadow:0 4px 14px rgba(255,106,61,.35)" style-hover="filter:brightness(1.06)">
+    <div style="display:flex;align-items:center;gap:6px">
+      <button onClick="{{ openKip }}" style="display:flex;align-items:center;gap:8px;height:42px;padding:0 14px 0 5px;border:0;border-radius:999px;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;box-shadow:0 4px 14px rgba(255,106,61,.35)" style-hover="filter:brightness(1.06)">
         <span style="width:34px;height:34px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden">{{ kipChat }}</span>Ask Kip
       </button>
-      <button onClick="{{ openReceipts }}" title="Decision receipts" style="display:flex;align-items:center;gap:7px;height:42px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="background:var(--surface2)">
+      <button onClick="{{ openBalances }}" title="Balances and bills" style="height:40px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="background:var(--surface2)">Balances</button>
+      <button onClick="{{ openGoals }}" title="Goals and plan" style="height:40px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="background:var(--surface2)">Goals</button>
+      <button onClick="{{ openReceipts }}" title="Decision receipts" aria-label="Decision receipts" style="display:flex;align-items:center;gap:6px;height:40px;padding:0 11px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="background:var(--surface2)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"></path><path d="M9 7h6M9 11h6M9 15h4"></path></svg>
-        Receipts<span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:1px 6px;border-radius:999px;background:var(--muted-soft);color:var(--muted)">{{ receiptCount }}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:1px 6px;border-radius:999px;background:var(--muted-soft);color:var(--muted)">{{ receiptCount }}</span>
       </button>
       <button onClick="{{ openSetup }}" title="Data and goals" style="width:42px;height:42px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--ink);cursor:pointer" style-hover="background:var(--surface2)">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>
@@ -91,7 +93,7 @@ input,button,select,textarea{font-family:inherit}
     <div ref="{{ scrollRef }}" onScroll="{{ onScroll }}" style="position:absolute;inset:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--line) transparent">
       <div style="position:relative;width:{{ W }}px;height:100%;min-height:640px">
 
-        <div style="position:absolute;left:40px;top:44px;width:320px;height:236px;background:var(--muted-soft);border-radius:14px"></div>
+        <div style="position:absolute;left:40px;top:44px;width:320px;height:{{ shadeH }}px;background:var(--muted-soft);border-radius:14px"></div>
         <sc-for list="{{ segs }}" as="sg" hint-placeholder-count="3">
           <div style="position:absolute;left:{{ sg.x }}px;top:14px;display:flex;align-items:baseline;gap:8px;padding-left:12px;white-space:nowrap">
             <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:15px;letter-spacing:-.01em">{{ sg.label }}</span>
@@ -132,10 +134,10 @@ input,button,select,textarea{font-family:inherit}
         <div style="position:absolute;left:40px;width:{{ lineW }}px;top:{{ cushionY }}px;border-top:1.5px dashed var(--bad);opacity:.6;transition:top .5s"></div>
         <div style="position:absolute;left:40px;width:{{ lineW }}px;top:{{ zeroY }}px;border-top:1px solid var(--ink);opacity:.25"></div>
         <sc-for list="{{ breaks }}" as="bk" hint-placeholder-count="1">
-          <div style="position:absolute;left:{{ bk.x }}px;top:40px;height:244px;border-left:1.5px dashed var(--muted);opacity:.45"></div>
-          <div style="position:absolute;left:{{ bk.x }}px;top:300px;transform:translateX(-50%);font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);background:var(--bg);padding:0 6px;white-space:nowrap">{{ bk.label }}</div>
+          <div style="position:absolute;left:{{ bk.x }}px;top:40px;height:{{ breakH }}px;border-left:1.5px dashed var(--muted);opacity:.45"></div>
+          <div style="position:absolute;left:{{ bk.x }}px;top:{{ breakLabelY }}px;transform:translateX(-50%);font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);background:var(--bg);padding:0 6px;white-space:nowrap">{{ bk.label }}</div>
         </sc-for>
-        <div style="position:absolute;left:{{ x0 }}px;top:40px;height:244px;border-left:2px solid var(--ink);opacity:.8"></div>
+        <div style="position:absolute;left:{{ x0 }}px;top:40px;height:{{ breakH }}px;border-left:2px solid var(--ink);opacity:.8"></div>
 
         <sc-for list="{{ ticks }}" as="tk" hint-placeholder-count="0">
           <div style="position:absolute;left:{{ tk.x }}px;top:{{ chartBottom }}px;transform:translateX(-50%);padding-top:6px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);white-space:nowrap">{{ tk.label }}</div>
@@ -167,7 +169,16 @@ input,button,select,textarea{font-family:inherit}
         </sc-for>
 
         <div style="position:absolute;left:{{ lowX }}px;top:{{ lowY }}px;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:3px solid {{ lowTone }};background:var(--surface);transition:top .5s,left .5s;z-index:6;animation:koinPulse 2s infinite"></div>
-        <div style="position:absolute;left:{{ lowX }}px;top:{{ lowY }}px;transform:translate(-50%,16px);padding:2px 8px;border-radius:999px;background:var(--surface);white-space:nowrap;transition:top .5s,left .5s;z-index:6;pointer-events:none;font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:700;color:{{ lowTone }}">{{ lowLabel }}</div>
+        <button onClick="{{ toggleLow }}" title="What happens at the lowest point?" style="position:absolute;left:{{ lowX }}px;top:{{ lowY }}px;transform:translate(-50%,16px);padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);white-space:nowrap;transition:top .5s,left .5s;z-index:8;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:700;color:{{ lowTone }}">{{ lowLabel }} ›</button>
+        <sc-if value="{{ lowOpen }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="Lowest point" style="position:absolute;left:{{ lowCalloutLeft }}px;top:{{ lowCalloutTop }}px;width:300px;box-sizing:border-box;padding:14px 16px;display:flex;flex-direction:column;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);z-index:12;animation:koinPop .2s ease">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--muted)">{{ low.date }} · LOWEST POINT</span><span style="flex:1"></span><button onClick="{{ toggleLow }}" title="Close" style="width:24px;height:24px;border:0;border-radius:50%;background:var(--surface2);color:var(--ink);cursor:pointer">×</button></div>
+            <div style="display:flex;align-items:baseline;gap:10px"><span style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:600;letter-spacing:-.03em;color:{{ low.tone }}">{{ low.value }}</span><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:700">{{ low.title }}</span></div>
+            <span style="align-self:flex-start;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:{{ low.toneSoft }};color:{{ low.tone }}">{{ low.gap }}</span>
+            <p style="margin:0;font-size:12.5px;line-height:1.45;color:var(--muted)">{{ low.why }}</p>
+            <div style="display:flex;gap:8px"><button onClick="{{ askLow }}" style="height:32px;padding:0 12px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">Ask Kip why</button><button onClick="{{ howForecast }}" style="height:32px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--ink);font-size:12.5px;cursor:pointer">How is this built?</button></div>
+          </div>
+        </sc-if>
 
         <sc-for list="{{ flags }}" as="fl" hint-placeholder-count="0">
           <div style="position:absolute;left:{{ fl.x }}px;top:{{ fl.y }}px;height:{{ fl.h }}px;transform:translateY(-{{ fl.h }}px);border-left:2px solid {{ fl.tone }};transition:left .6s,top .6s;z-index:6"></div>
@@ -185,49 +196,74 @@ input,button,select,textarea{font-family:inherit}
           </div>
         </sc-if>
 
-        <div data-screen-label="Where you stand" style="position:absolute;left:24px;top:318px;width:470px;height:318px;box-sizing:border-box;padding:18px 20px;display:flex;flex-direction:column;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s;animation:koinRise .7s .05s cubic-bezier(.2,.8,.2,1) both;z-index:2">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--muted)">{{ todayLabel }}</span><span style="flex:1"></span>
-            <button onClick="{{ howStand }}" style="height:24px;padding:0 9px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="color:var(--ink)">Where’s this from?</button>
-          </div>
-          <p style="margin:0;font-size:17px;line-height:1.5;text-wrap:pretty">You have <b style="font-family:'JetBrains Mono',monospace;font-size:15.5px">{{ stand.checking }}</b> in <span data-term="checking" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" style="border-bottom:1.5px dotted var(--water-line);cursor:help;outline:none">checking</span> and <b style="font-family:'JetBrains Mono',monospace;font-size:15.5px">{{ stand.savings }}</b> in <span data-term="savings" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" style="border-bottom:1.5px dotted var(--water-line);cursor:help;outline:none">savings</span>. You <span data-term="owe" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" style="border-bottom:1.5px dotted var(--water-line);cursor:help;outline:none">owe</span> <b style="font-family:'JetBrains Mono',monospace;font-size:15.5px">{{ stand.owe }}</b> {{ stand.oweWhat }}.</p>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-            <div style="padding:10px 12px;border-radius:14px;background:var(--surface2);display:flex;flex-direction:column;gap:3px">
-              <span data-term="networth" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="align-self:flex-start;font-size:11px;color:var(--muted);border-bottom:1px dotted var(--muted);cursor:help;outline:none">Net worth</span>
-              <span style="font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:600;color:{{ stand.nwTone }}">{{ stand.nw }}</span>
-            </div>
-            <div style="padding:10px 12px;border-radius:14px;background:var(--surface2);display:flex;flex-direction:column;gap:3px">
-              <span data-term="emergency" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="align-self:flex-start;font-size:11px;color:var(--muted);border-bottom:1px dotted var(--muted);cursor:help;outline:none">Emergency savings</span>
-              <span style="font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:600">{{ stand.cov }}</span>
-            </div>
-            <div style="padding:10px 12px;border-radius:14px;background:var(--surface2);display:flex;flex-direction:column;gap:3px">
-              <span data-term="lowest" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="align-self:flex-start;font-size:11px;color:var(--muted);border-bottom:1px dotted var(--muted);cursor:help;outline:none">Lowest ahead</span>
-              <span style="font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:600;color:{{ stand.lowTone }}">{{ stand.lowest }}</span>
-            </div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <sc-for list="{{ stand.findings }}" as="fd" hint-placeholder-count="3">
-              <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;border-radius:11px;background:{{ fd.bg }}">
-                <span style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:{{ fd.dot }};width:42px;flex:none">{{ fd.kind }}</span>
-                <span style="font-size:12.5px;line-height:1.35">{{ fd.text }}</span>
-              </div>
-            </sc-for>
-          </div>
+      </div>
+    </div>
+    <div style="position:absolute;left:0;top:30px;width:62px;height:{{ axisH }}px;background:linear-gradient(90deg,var(--bg) 62%,transparent);pointer-events:none;z-index:9">
+      <div style="position:absolute;left:10px;top:2px;font-size:9.5px;font-weight:800;letter-spacing:.08em;color:var(--muted)">CHECKING</div>
+      <sc-for list="{{ grid }}" as="ya" hint-placeholder-count="5">
+        <div style="position:absolute;left:0;width:50px;top:calc({{ ya.y }}px - 30px);transform:translateY(-50%);text-align:right;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;color:var(--muted);transition:top .5s;white-space:nowrap">{{ ya.label }}</div>
+      </sc-for>
+    </div>
+    <div style="position:absolute;right:0;top:0;bottom:0;width:48px;background:linear-gradient(270deg,var(--bg),transparent);pointer-events:none"></div>
+    <div data-screen-label="Stream actions" style="position:absolute;left:76px;top:calc({{ chartBottom }}px + 46px);display:flex;flex-wrap:wrap;gap:8px;z-index:10">
+      <button onClick="{{ editIncome }}" style="height:34px;padding:0 14px;border-radius:999px;border:1.5px solid var(--good);background:var(--good-soft);color:var(--good);font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap">{{ payChip }}</button>
+      <button onClick="{{ openWhatIfPay }}" style="height:34px;padding:0 14px;border-radius:999px;border:1px dashed var(--accent);background:var(--surface);color:var(--accent);font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap">+ What if I pay extra?</button>
+      <sc-if value="{{ hasSplit }}" hint-placeholder-val="{{ false }}"><button onClick="{{ openSplit }}" style="height:34px;padding:0 14px;border-radius:999px;border:1.5px solid var(--info);background:var(--info-soft);color:var(--info);font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap">{{ split.chip }}</button></sc-if>
+      <button onClick="{{ openWhatIfSave }}" style="height:34px;padding:0 14px;border-radius:999px;border:1px dashed var(--line);background:var(--surface);color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap">+ What if I save for something?</button>
+    </div>
+    <sc-if value="{{ incOpen }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Paychecks" style="position:absolute;left:76px;top:calc({{ chartBottom }}px - 150px);width:440px;box-sizing:border-box;padding:16px 18px;display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);z-index:12;animation:koinPop .2s ease">
+        <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:700">Money coming in</span><span style="flex:1"></span><button onClick="{{ cancelIncome }}" title="Close" style="width:24px;height:24px;border:0;border-radius:50%;background:var(--surface2);color:var(--ink);cursor:pointer">×</button></div>
+        <div style="display:flex;gap:4px;padding:3px;border-radius:999px;background:var(--surface2);align-self:flex-start">
+          <button onClick="{{ inc.toPay }}" style="height:28px;padding:0 12px;border:0;border-radius:999px;background:{{ inc.payBg }};color:{{ inc.payFg }};font-size:12px;font-weight:700;cursor:pointer">Regular pay</button>
+          <button onClick="{{ inc.toOnce }}" style="height:28px;padding:0 12px;border:0;border-radius:999px;background:{{ inc.onceBg }};color:{{ inc.onceFg }};font-size:12px;font-weight:700;cursor:pointer">One-time money</button>
         </div>
-
-        <div style="position:absolute;left:514px;top:318px;width:290px;height:318px;box-sizing:border-box;padding:18px 20px;display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s;animation:koinRise .7s .12s cubic-bezier(.2,.8,.2,1) both;z-index:2">
-          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--muted)">{{ low.date }} · LOWEST POINT</span><span style="flex:1"></span>
-            <button onClick="{{ howForecast }}" title="How is this built?" style="width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer">?</button></div>
-          <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.02em">{{ low.title }}</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:40px;font-weight:600;letter-spacing:-.04em;color:{{ low.tone }};line-height:1">{{ low.value }}</div>
-          <span style="align-self:flex-start;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;background:{{ low.toneSoft }};color:{{ low.tone }}">{{ low.gap }}</span>
-          <p style="margin:0;font-size:13px;line-height:1.5;color:var(--muted);text-wrap:pretty">{{ low.why }}</p>
-          <div style="margin-top:auto;font-size:12px;color:var(--muted);line-height:1.45">Hover the stream to see any day. Kip swims there.</div>
+        <sc-if value="{{ inc.isPay }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="display:flex;align-items:center;gap:2px;height:36px;padding:0 10px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface2);width:110px;box-sizing:border-box"><span style="font-family:'JetBrains Mono',monospace;color:var(--muted)">$</span><input value="{{ inc.amount }}" onChange="{{ inc.setAmount }}" inputmode="numeric" placeholder="2100" aria-label="Paycheck amount" style="width:100%;min-width:0;border:0;outline:none;background:transparent;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--ink)"></label>
+          {{ inc.everySelect }}
+          <input type="date" value="{{ inc.next }}" onChange="{{ inc.setNext }}" aria-label="Next payday" style="height:36px;padding:0 8px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface2);color:var(--ink);font-size:13px">
         </div>
-
-        <div onMouseEnter="{{ payEnter }}" onMouseLeave="{{ payLeave }}" data-screen-label="Extra payment" style="position:absolute;left:824px;top:318px;width:380px;height:318px;box-sizing:border-box;padding:18px 20px;display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s;animation:koinRise .7s .19s cubic-bezier(.2,.8,.2,1) both;z-index:2">
-          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--accent)">TRY IT · EXTRA CARD PAYMENT</span><span style="flex:1"></span>
-            <button onClick="{{ howPay }}" title="How is a payment checked?" style="width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer">?</button></div>
+        <div style="display:flex;gap:8px;align-items:center"><button onClick="{{ saveIncome }}" style="height:34px;padding:0 14px;border:0;border-radius:10px;background:var(--good);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">Add paydays</button><span style="font-size:11.5px;color:var(--muted);line-height:1.35">One paycheck, how often, and your next payday. Or tell Kip, like “I get paid $2,100 every two weeks”.</span></div>
+        </sc-if>
+        <sc-if value="{{ inc.isOnce }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:8px;align-items:center">
+            <label style="display:flex;align-items:center;gap:2px;height:36px;padding:0 10px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface2);width:110px;box-sizing:border-box"><span style="font-family:'JetBrains Mono',monospace;color:var(--muted)">$</span><input value="{{ inc.onceAmount }}" onChange="{{ inc.setOnceAmount }}" inputmode="numeric" placeholder="500" aria-label="One-time amount" style="width:100%;min-width:0;border:0;outline:none;background:transparent;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--ink)"></label>
+            <input type="date" value="{{ inc.onceDate }}" min="{{ inc.minDate }}" onChange="{{ inc.setOnceDate }}" aria-label="Date the money lands" style="height:36px;padding:0 8px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface2);color:var(--ink);font-size:13px">
+            <input value="{{ inc.onceLabel }}" onChange="{{ inc.setOnceLabel }}" placeholder="Bonus, refund, gift…" aria-label="What it is" style="flex:1;min-width:0;height:36px;padding:0 10px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface2);color:var(--ink);font-size:13px;outline:none">
+          </div>
+          <div style="display:flex;gap:8px;align-items:center"><button onClick="{{ saveIncome }}" style="height:34px;padding:0 14px;border:0;border-radius:10px;background:var(--good);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">Add money</button><span style="font-size:11.5px;color:var(--muted);line-height:1.35">Raises your stream from that day. Or tell Kip, like “I got a $500 bonus today”.</span></div>
+          <sc-if value="{{ inc.hasList }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-wrap:wrap;gap:6px;padding-top:8px;border-top:1px solid var(--line)">
+              <sc-for list="{{ inc.list }}" as="ot" hint-placeholder-count="0">
+                <span style="display:flex;align-items:center;gap:4px;padding:2px 4px 2px 9px;border-radius:999px;background:var(--good-soft);color:var(--good);font-size:11.5px;font-weight:700">{{ ot.label }}<button onClick="{{ ot.remove }}" title="Remove" style="width:18px;height:18px;border:0;border-radius:50%;background:transparent;color:inherit;cursor:pointer;font-size:13px;line-height:1">×</button></span>
+              </sc-for>
+            </div>
+          </sc-if>
+        </sc-if>
+      </div>
+    </sc-if>
+    <sc-if value="{{ splitOpen }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Surplus split" style="position:absolute;left:76px;top:40px;width:420px;box-sizing:border-box;padding:16px 18px;display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);z-index:12;animation:koinPop .2s ease">
+        <div style="display:flex;align-items:center;gap:8px"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--info)">YOUR EXTRA EACH MONTH</span><span style="flex:1"></span><button onClick="{{ openSplit }}" title="Close" style="width:24px;height:24px;border:0;border-radius:50%;background:var(--surface2);color:var(--ink);cursor:pointer">×</button></div>
+        <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:19px;font-weight:700;letter-spacing:-.02em">Where your {{ split.total }} could go</div>
+        <div style="display:flex;flex-direction:column">
+          <sc-for list="{{ split.items }}" as="si" hint-placeholder-count="2">
+            <div style="display:flex;flex-direction:column;gap:2px;padding:7px 0;border-bottom:1px dashed var(--line)">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="flex:1;font-size:13px;font-weight:600">{{ si.name }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:{{ si.tone }}">{{ si.amt }}</span></div>
+              <span style="font-size:11.5px;color:var(--muted)">{{ si.reason }}</span>
+            </div>
+          </sc-for>
+          <div style="display:flex;align-items:baseline;gap:8px;padding:7px 0"><span style="flex:1;font-size:13px;color:var(--muted)">Keep unassigned in checking</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700">{{ split.keep }}</span></div>
+        </div>
+        <span style="font-size:11px;line-height:1.4;color:var(--muted)">Calculated by Koin’s finance code from your saved plan: {{ split.rule }}</span>
+        <div style="display:flex;gap:8px"><button onClick="{{ applySplit }}" style="height:34px;padding:0 14px;border:0;border-radius:10px;background:var(--ink);color:var(--bg);font-size:12.5px;font-weight:700;cursor:pointer">Apply to my sliders</button><button onClick="{{ askSplit }}" style="height:34px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--ink);font-size:12.5px;cursor:pointer">Ask Kip about it</button></div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ whatIfPay }}" hint-placeholder-val="{{ false }}">
+        <div onMouseEnter="{{ payEnter }}" onMouseLeave="{{ payLeave }}" data-screen-label="Extra payment" style="position:absolute;left:76px;top:40px;width:380px;box-sizing:border-box;padding:18px 20px;display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s;z-index:12;animation:koinPop .2s ease">
+          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--accent)">WHAT IF · EXTRA CARD PAYMENT</span><span style="flex:1"></span>
+            <button onClick="{{ closeWhatIf }}" title="Close" style="width:24px;height:24px;border-radius:50%;border:0;background:var(--surface2);color:var(--ink);font-size:14px;cursor:pointer;margin-right:4px">×</button><button onClick="{{ howPay }}" title="How is a payment checked?" style="width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer">?</button></div>
           <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:1.15">What if I pay extra on my card?</div>
           <div style="display:flex;gap:6px">
             <label style="display:flex;align-items:center;gap:2px;padding:0 10px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface2);width:92px;flex:none">
@@ -246,7 +282,7 @@ input,button,select,textarea{font-family:inherit}
             </div>
             <div style="display:flex;gap:8px;align-items:center;margin-top:auto">
               <button onClick="{{ payReview }}" style="height:40px;padding:0 16px;border:0;border-radius:12px;background:var(--ink);color:var(--bg);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap" style-hover="opacity:.9">Review this payment</button>
-              <span style="font-size:11.5px;color:var(--muted);line-height:1.35">Hover here to see it on the stream</span>
+              <span style="font-size:11.5px;color:var(--muted);line-height:1.35">The dashed line shows it on the stream</span>
             </div>
           </sc-if>
           <sc-if value="{{ pay.reviewing }}" hint-placeholder-val="{{ false }}">
@@ -283,157 +319,7 @@ input,button,select,textarea{font-family:inherit}
           </sc-if>
         </div>
 
-        <div style="position:absolute;left:1224px;top:318px;width:330px;height:318px;box-sizing:border-box;padding:18px 20px;display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s;animation:koinRise .7s .26s cubic-bezier(.2,.8,.2,1) both;z-index:2">
-          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--muted)">NEXT 30 DAYS</span></div>
-          <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:700;letter-spacing:-.02em">Coming up</div>
-          <div style="display:flex;flex-direction:column">
-            <sc-for list="{{ upcoming }}" as="u" hint-placeholder-count="6">
-              <div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:12.5px">
-                <span style="width:46px;flex:none;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)">{{ u.date }}</span>
-                <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ u.label }}</span>
-                <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:{{ u.tone }}">{{ u.amt }}</span>
-                <span style="width:58px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)">{{ u.after }}</span>
-              </div>
-            </sc-for>
-          </div>
-          <div style="margin-top:auto;font-size:11px;color:var(--muted)">Right column: checking after that day.</div>
-        </div>
-
-        <div data-screen-label="Habits breakdown" style="position:absolute;left:1574px;top:318px;width:400px;height:318px;box-sizing:border-box;padding:18px 20px;display:flex;flex-direction:column;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s;animation:koinRise .7s .33s cubic-bezier(.2,.8,.2,1) both;z-index:2">
-          <div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--muted)">YOUR HABITS · PER MONTH</div>
-          <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:700;letter-spacing:-.02em">Where {{ spend.total }} goes</div>
-          <div style="display:flex;flex-direction:column;gap:7px">
-            <sc-for list="{{ spend.rows }}" as="sr" hint-placeholder-count="6">
-              <div style="display:grid;grid-template-columns:112px 1fr 56px 44px;align-items:center;gap:8px;font-size:12.5px">
-                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sr.label }}</span>
-                <div style="position:relative;height:10px;border-radius:6px;background:var(--surface2)">
-                  <div style="position:absolute;left:0;top:0;bottom:0;width:{{ sr.pPlan }};border-radius:6px;border:1.5px dashed var(--muted);opacity:.45;box-sizing:border-box"></div>
-                  <div style="position:absolute;left:0;top:0;bottom:0;width:{{ sr.pSim }};border-radius:6px;background:var(--water-line);transition:width .5s cubic-bezier(.2,.8,.2,1)"></div>
-                </div>
-                <span style="font-family:'JetBrains Mono',monospace;font-weight:600;text-align:right">{{ sr.sim }}</span>
-                <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;color:{{ sr.dTone }}">{{ sr.dText }}</span>
-              </div>
-            </sc-for>
-          </div>
-          <div style="margin-top:auto;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding-top:10px;border-top:1px solid var(--line)">
-            <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10.5px;color:var(--muted)">Take-home</span><span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600">{{ spend.income }}</span></div>
-            <div style="display:flex;flex-direction:column;gap:2px"><span data-term="essentials" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="align-self:flex-start;font-size:10.5px;color:var(--muted);border-bottom:1px dotted var(--muted);cursor:help;outline:none">Essential bills</span><span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600">{{ spend.essentials }}</span></div>
-            <div style="display:flex;flex-direction:column;gap:2px"><span data-term="leftover" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="align-self:flex-start;font-size:10.5px;color:var(--muted);border-bottom:1px dotted var(--muted);cursor:help;outline:none">Unassigned</span><span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:{{ spend.leftoverTone }}">{{ spend.leftover }}</span></div>
-          </div>
-        </div>
-
-        <div data-screen-label="Your goals" style="position:absolute;left:{{ hubLeft }}px;top:318px;width:340px;height:318px;box-sizing:border-box;padding:16px 18px;display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s;animation:koinRise .7s .4s cubic-bezier(.2,.8,.2,1) both;z-index:2">
-          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--accent)">YOUR GOALS</span><span style="flex:1"></span>
-            <button onClick="{{ howGoals }}" title="How do goals change the stream?" style="width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer">?</button></div>
-          <div style="display:flex;align-items:center;gap:8px"><div style="width:44px;flex:none">{{ kipHub }}</div><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:700;letter-spacing:-.02em;line-height:1.15">Tell Kip what you’re aiming for</span></div>
-          <div style="display:flex;gap:6px">
-            <input value="{{ goalInput }}" onChange="{{ setGoalInput }}" onKeyDown="{{ goalKey }}" placeholder="e.g. Pay off my car loan, $9k at 7%" style="flex:1;min-width:0;height:38px;padding:0 12px;border:1.5px solid var(--line);border-radius:11px;background:var(--surface2);color:var(--ink);font-size:12.5px;outline:none">
-            <button onClick="{{ goalSend }}" title="Send to Kip" style="width:38px;height:38px;border:0;border-radius:11px;background:var(--accent);color:#fff;font-size:17px;font-weight:700;cursor:pointer">→</button>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:5px">
-            <sc-for list="{{ goalExamples }}" as="ge" hint-placeholder-count="3">
-              <button onClick="{{ ge.onClick }}" style="padding:4px 9px;border:1px dashed var(--line);border-radius:999px;background:transparent;color:var(--ink);font-size:11px;cursor:pointer;white-space:nowrap" style-hover="background:var(--surface2)">{{ ge.text }}</button>
-            </sc-for>
-          </div>
-          <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;border-top:1px solid var(--line)">
-            <sc-for list="{{ hubGoals }}" as="hg" hint-placeholder-count="2">
-              <button onClick="{{ hg.onClick }}" style="display:flex;align-items:center;gap:8px;padding:5px 2px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font-size:12.5px;cursor:pointer;text-align:left" style-hover="background:var(--surface2)"><span style="width:8px;height:8px;border-radius:50%;background:{{ hg.color }};flex:none"></span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ hg.name }}</span><span style="font-size:11px;color:var(--muted)">{{ hg.verb }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:600">{{ hg.date }}</span></button>
-            </sc-for>
-          </div>
-        </div>
-
-        <sc-for list="{{ goalCards }}" as="gc" hint-placeholder-count="2">
-          <div data-screen-label="Goal card" style="position:absolute;left:{{ gc.left }}px;top:318px;width:300px;height:318px;box-sizing:border-box;padding:14px 18px 16px;display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-top:4px solid {{ gc.color }};border-radius:22px;box-shadow:var(--shadow);transition:left .7s cubic-bezier(.3,1.2,.4,1),background .45s;animation:koinRise .6s .45s cubic-bezier(.2,.8,.2,1) both;z-index:2">
-            <div style="display:flex;align-items:center;gap:7px;min-height:20px"><span style="width:8px;height:8px;border-radius:50%;background:{{ gc.color }}"></span><span style="font-size:10.5px;font-weight:800;letter-spacing:.08em;color:{{ gc.color }}">{{ gc.typeLabel }}</span><span style="flex:1"></span>
-              <sc-if value="{{ gc.removable }}" hint-placeholder-val="{{ false }}"><button onClick="{{ gc.remove }}" title="Remove goal" style="width:22px;height:22px;border:0;border-radius:50%;background:var(--surface2);color:var(--muted);font-size:14px;line-height:1;cursor:pointer">×</button></sc-if></div>
-            <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:19px;font-weight:700;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ gc.name }}</div>
-            <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:11.5px;color:var(--muted)">{{ gc.verb }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;letter-spacing:-.03em">{{ gc.bigDate }}</span><sc-if value="{{ gc.dShow }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:700;color:{{ gc.dTone }}">{{ gc.d }}</span></sc-if></div>
-            <sc-if value="{{ gc.isSave }}" hint-placeholder-val="{{ true }}"><div style="height:8px;border-radius:6px;background:var(--surface2);overflow:hidden"><div style="height:100%;width:{{ gc.pct }};background:{{ gc.color }};border-radius:6px"></div></div></sc-if>
-            <span style="font-size:11.5px;color:var(--muted)">{{ gc.progressText }}</span>
-            <sc-if value="{{ gc.idle }}" hint-placeholder-val="{{ true }}">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-                <div style="padding:6px 9px;border-radius:10px;background:var(--surface2)"><div style="font-size:10.5px;color:var(--muted)">Monthly</div><div style="font-family:'JetBrains Mono',monospace;font-size:13.5px;font-weight:600">{{ gc.monthly }}</div></div>
-                <div style="padding:6px 9px;border-radius:10px;background:var(--surface2)"><div style="font-size:10.5px;color:var(--muted)">{{ gc.thirdLabel }}</div><div style="font-family:'JetBrains Mono',monospace;font-size:13.5px;font-weight:600">{{ gc.third }}</div></div>
-              </div>
-              <div style="font-size:12px;color:var(--muted)">Time to go: <b style="color:var(--ink);font-weight:700">{{ gc.duration }}</b></div>
-            </sc-if>
-            <sc-if value="{{ gc.reviewing }}" hint-placeholder-val="{{ false }}">
-              <div style="display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:14px;background:var(--surface2)">
-                <sc-for list="{{ gc.steps }}" as="st" hint-placeholder-count="0"><div style="display:flex;align-items:center;gap:8px;opacity:{{ st.op }}"><span style="width:8px;height:8px;border-radius:50%;background:{{ st.dot }}"></span><span style="font-size:12.5px;font-weight:600">{{ st.role }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;padding:2px 5px;border-radius:4px;background:{{ st.kBg }};color:{{ st.kFg }}">{{ st.kind }}</span><span style="flex:1"></span><span style="font-size:11px;color:var(--muted)">{{ st.stateLabel }}</span></div></sc-for>
-              </div>
-            </sc-if>
-            <sc-if value="{{ gc.done }}" hint-placeholder-val="{{ false }}">
-              <div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:{{ gc.vBg }};color:{{ gc.vTone }}">{{ gc.verdict }}</span><button onClick="{{ howApprove }}" style="border:0;background:transparent;color:var(--muted);font-size:11.5px;text-decoration:underline;cursor:pointer;padding:0">What does approving do?</button></div>
-              <p data-noscrolljack style="margin:0;font-size:12px;line-height:1.42;max-height:76px;overflow-y:auto;text-wrap:pretty">{{ gc.summary }}</p>
-              <div style="display:flex;gap:8px">
-                <sc-if value="{{ gc.ok }}" hint-placeholder-val="{{ false }}"><button onClick="{{ gc.approve }}" style="height:36px;padding:0 14px;border:0;border-radius:11px;background:var(--good);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">Approve change</button></sc-if>
-                <button onClick="{{ gc.cancel }}" style="height:36px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:transparent;color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer">Back</button>
-              </div>
-            </sc-if>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:auto">
-              <button onClick="{{ gc.down }}" style="height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="background:var(--surface2)">−$25</button>
-              <button onClick="{{ gc.up }}" style="height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="background:var(--surface2)">+$25</button>
-              <span style="flex:1"></span>
-              <sc-if value="{{ gc.showReview }}" hint-placeholder-val="{{ false }}"><button onClick="{{ gc.review }}" style="height:30px;padding:0 12px;border:0;border-radius:10px;background:var(--ink);color:var(--bg);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Review change</button></sc-if>
-            </div>
-            <sc-if value="{{ gc.showNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;line-height:1.4;color:var(--muted);text-wrap:pretty">{{ gc.note }}</div></sc-if>
-            <sc-if value="{{ gc.hasRouted }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:14px;right:44px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--good-soft);color:var(--good)">{{ gc.routed }}</span></sc-if>
-          </div>
-        </sc-for>
-
-        <div data-screen-label="A year from now" style="position:absolute;left:{{ year.left }}px;transition:left .7s cubic-bezier(.3,1.2,.4,1),background .45s;top:318px;width:420px;height:318px;box-sizing:border-box;padding:18px 20px;display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s;animation:koinRise .7s .54s cubic-bezier(.2,.8,.2,1) both;z-index:2">
-          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--muted)">{{ yearLabel }}</span></div>
-          <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:700;letter-spacing:-.02em"><span data-term="networth12" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="border-bottom:1.5px dotted var(--muted);cursor:help;outline:none">Net worth in a year</span></div>
-          <div style="display:flex;align-items:baseline;gap:10px">
-            <span style="font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:600;letter-spacing:-.04em;color:var(--info)">{{ year.nw12 }}</span>
-            <sc-if value="{{ year.dShow }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-weight:700;color:{{ year.dTone }}">{{ year.d }} vs plan</span></sc-if>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-            <div style="padding:8px 10px;border-radius:12px;background:var(--surface2)"><div style="font-size:10.5px;color:var(--muted)">Today</div><div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600">{{ year.nwNow }}</div></div>
-            <div style="padding:8px 10px;border-radius:12px;background:var(--surface2)"><div style="font-size:10.5px;color:var(--muted)">Savings</div><div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600">{{ year.sav12 }}</div></div>
-            <div style="padding:8px 10px;border-radius:12px;background:var(--surface2)"><div style="font-size:10.5px;color:var(--muted)">Emergency</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;line-height:1.3">{{ year.cov12 }}</div></div>
-          </div>
-          <sc-if value="{{ year.changed }}" hint-placeholder-val="{{ false }}">
-            <sc-if value="{{ year.idle }}" hint-placeholder-val="{{ true }}">
-              <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px;border-radius:14px;background:var(--you-bg)">
-                <span style="flex:1;font-size:12.5px;color:var(--you-fg);font-weight:600">Like where this is heading? Make these habits your plan.</span>
-                <button onClick="{{ lockReview }}" style="height:36px;padding:0 14px;border:0;border-radius:11px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap">Review &amp; lock in</button>
-              </div>
-            </sc-if>
-            <sc-if value="{{ year.reviewing }}" hint-placeholder-val="{{ false }}">
-              <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:14px;background:var(--surface2)">
-                <sc-for list="{{ year.steps }}" as="st" hint-placeholder-count="0">
-                  <div style="display:flex;align-items:center;gap:8px;opacity:{{ st.op }}"><span style="width:8px;height:8px;border-radius:50%;background:{{ st.dot }}"></span><span style="font-size:12.5px;font-weight:600">{{ st.role }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;padding:2px 5px;border-radius:4px;background:{{ st.kBg }};color:{{ st.kFg }}">{{ st.kind }}</span><span style="flex:1"></span><span style="font-size:11px;color:var(--muted)">{{ st.stateLabel }}</span></div>
-                </sc-for>
-              </div>
-            </sc-if>
-            <sc-if value="{{ year.done }}" hint-placeholder-val="{{ false }}">
-              <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">
-                <sc-for list="{{ year.rows }}" as="r" hint-placeholder-count="0">
-                  <div style="display:flex;gap:8px;font-size:12px"><span style="flex:1;color:var(--muted)">{{ r.label }}</span><span style="font-family:'JetBrains Mono',monospace;color:var(--muted)">{{ r.before }}</span><span style="color:var(--muted)">→</span><span style="font-family:'JetBrains Mono',monospace;font-weight:700">{{ r.after }}</span></div>
-                </sc-for>
-                <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
-                  <span style="font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:{{ year.vBg }};color:{{ year.vTone }}">{{ year.verdict }}</span><span style="flex:1"></span>
-                  <sc-if value="{{ year.ok }}" hint-placeholder-val="{{ false }}"><button onClick="{{ lockApprove }}" style="height:36px;padding:0 14px;border:0;border-radius:11px;background:var(--good);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">Approve</button></sc-if>
-                  <button onClick="{{ lockCancel }}" style="height:36px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:transparent;color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer">Back</button>
-                </div>
-              </div>
-            </sc-if>
-          </sc-if>
-          <sc-if value="{{ year.showHint }}" hint-placeholder-val="{{ true }}">
-            <div style="margin-top:auto;font-size:12px;color:var(--muted);line-height:1.45">Drag habits or tell Kip a goal, and watch this number move.</div>
-          </sc-if>
-        </div>
-
-      </div>
-    </div>
-    <div style="position:absolute;left:0;top:30px;width:62px;height:270px;background:linear-gradient(90deg,var(--bg) 62%,transparent);pointer-events:none;z-index:9">
-      <div style="position:absolute;left:10px;top:2px;font-size:9.5px;font-weight:800;letter-spacing:.08em;color:var(--muted)">CHECKING</div>
-      <sc-for list="{{ grid }}" as="ya" hint-placeholder-count="5">
-        <div style="position:absolute;left:0;width:50px;top:calc({{ ya.y }}px - 30px);transform:translateY(-50%);text-align:right;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;color:var(--muted);transition:top .5s;white-space:nowrap">{{ ya.label }}</div>
-      </sc-for>
-    </div>
-    <div style="position:absolute;right:0;top:0;bottom:0;width:48px;background:linear-gradient(270deg,var(--bg),transparent);pointer-events:none"></div>
+    </sc-if>
     <div style="position:absolute;top:10px;right:18px;display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);z-index:8">
       <sc-for list="{{ jumps }}" as="j" hint-placeholder-count="3">
         <button onClick="{{ j.onClick }}" style="height:28px;padding:0 12px;border:0;border-radius:999px;background:{{ j.bg }};color:{{ j.fg }};font-size:12px;font-weight:700;cursor:pointer;transition:all .25s">{{ j.label }}</button>
@@ -441,15 +327,54 @@ input,button,select,textarea{font-family:inherit}
     </div>
   </main>
 
-  <footer data-screen-label="Habit dock" style="display:grid;grid-template-columns:350px minmax(0,1fr) 236px;gap:0;background:var(--surface);border-top:1px solid var(--line);transition:background .45s;z-index:20">
-    <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-right:1px solid var(--line)">
-      <div style="flex:none;width:86px;display:flex;justify-content:center">{{ kipDock }}</div>
-      <div style="position:relative;display:flex;flex-direction:column;gap:6px;min-width:0">
-        <div style="position:relative;padding:10px 12px;border-radius:14px 14px 14px 4px;background:var(--surface2);border:1px solid var(--line);font-size:12.5px;line-height:1.42;text-wrap:pretty">{{ kipLine }}</div>
-        <span style="font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--muted);text-transform:uppercase">{{ kipMood }}</span>
+  <footer data-screen-label="Dock" style="position:relative;padding:0 16px 12px;background:var(--bg);transition:background .45s;z-index:20">
+    <div style="height:100%;box-sizing:border-box;display:grid;grid-template-columns:380px minmax(0,1fr) 220px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-right:1px solid var(--line);min-width:0">
+        <div style="flex:none;width:66px;display:flex;justify-content:center">{{ kipDock }}</div>
+        <div style="display:flex;flex-direction:column;gap:7px;min-width:0;flex:1">
+          <div style="font-size:12px;line-height:1.38;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ kipLine }}</div>
+          <div style="display:flex;gap:6px">
+            <input value="{{ goalInput }}" onChange="{{ setGoalInput }}" onKeyDown="{{ goalKey }}" placeholder="Tell Kip a goal, or ask anything…" style="flex:1;min-width:0;height:34px;padding:0 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface2);color:var(--ink);font-size:12.5px;outline:none">
+            <button onClick="{{ goalSend }}" title="Send to Kip" style="width:34px;height:34px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-size:16px;font-weight:700;cursor:pointer">→</button>
+          </div>
+        </div>
       </div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) 140px;gap:20px;padding:12px 20px;align-items:center">
+      <sc-for list="{{ macro }}" as="lv" hint-placeholder-count="3">
+        <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ lv.label }}</span><span style="flex:1"></span>
+            <sc-if value="{{ lv.dShow }}" hint-placeholder-val="{{ false }}"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:{{ lv.dBg }};color:{{ lv.dTone }};white-space:nowrap">{{ lv.dText }}</span></sc-if>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;letter-spacing:-.02em">{{ lv.valueLabel }}<span style="font-size:10.5px;color:var(--muted);font-weight:400">/mo</span></div>
+          <div style="position:relative;height:18px">
+            <div style="position:absolute;left:0;right:0;top:7px;height:4px;border-radius:4px;background:var(--line)"></div>
+            <div style="position:absolute;left:0;top:7px;height:4px;border-radius:4px;width:{{ lv.pct }};background:{{ lv.fill }}"></div>
+            <div style="position:absolute;top:3px;left:{{ lv.basePct }};width:2px;height:12px;margin-left:-1px;border-radius:2px;background:var(--muted);opacity:.55"></div>
+            <div style="position:absolute;top:1px;left:{{ lv.pct }};width:16px;height:16px;margin-left:-8px;box-sizing:border-box;border-radius:50%;background:var(--surface);border:3px solid {{ lv.fill }};box-shadow:0 1px 4px rgba(0,0,0,.18);pointer-events:none"></div>
+            <input type="range" min="{{ lv.min }}" max="{{ lv.max }}" step="{{ lv.step }}" value="{{ lv.value }}" onChange="{{ lv.onChange }}" aria-label="{{ lv.label }}" style="position:absolute;left:-8px;top:0;width:calc(100% + 16px);height:100%;margin:0;opacity:0;cursor:pointer">
+          </div>
+        </div>
+      </sc-for>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <span data-term="freed" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="align-self:flex-start;font-size:11px;font-weight:600;color:var(--muted);border-bottom:1px dotted var(--muted);cursor:help;outline:none">Freed up vs. usual</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:{{ freed.tone }}">{{ freed.text }}</span>
+          <button onClick="{{ toggleBreakdown }}" style="align-self:flex-start;height:26px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font-size:11.5px;font-weight:600;cursor:pointer">{{ breakdownLabel }}</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:9px;padding:12px 16px;border-left:1px solid var(--line)">
+      <span style="font-size:11.5px;font-weight:600;color:var(--muted)">Send freed-up cash to</span>
+      {{ routeSelect }}
+      <sc-if value="{{ changed }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:6px;margin-top:auto">
+          <button onClick="{{ reset }}" style="height:36px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:transparent;color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer">Reset</button>
+          <button onClick="{{ lockDock }}" style="flex:1;height:36px;padding:0 10px;border:0;border-radius:11px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">Review &amp; lock in</button>
+        </div>
+      </sc-if>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:1fr 1fr;gap:12px 22px;padding:14px 22px">
+    </div>
+    <sc-if value="{{ breakdownOpen }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Spending breakdown" style="position:absolute;left:412px;right:252px;bottom:calc(100% + 4px);box-sizing:border-box;padding:16px 20px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px 22px;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);animation:koinPop .2s ease">
       <sc-for list="{{ levers }}" as="lv" hint-placeholder-count="9">
         <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
           <div style="display:flex;align-items:center;gap:6px">
@@ -466,26 +391,12 @@ input,button,select,textarea{font-family:inherit}
           </div>
         </div>
       </sc-for>
-      <div style="display:flex;flex-direction:column;justify-content:center;gap:2px;padding:6px 12px;border-radius:14px;background:var(--surface2);border:1px solid var(--line)">
-        <span data-term="freed" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="align-self:flex-start;font-size:11px;font-weight:600;color:var(--muted);border-bottom:1px dotted var(--muted);cursor:help;outline:none">Freed up vs. usual</span>
-        <span style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:{{ freed.tone }}">{{ freed.text }}</span>
-        <span style="font-size:10.5px;color:var(--muted)">{{ freed.year }}</span>
       </div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:9px;padding:14px 18px;border-left:1px solid var(--line)">
-      <span style="font-size:11.5px;font-weight:600;color:var(--muted)">Send freed-up cash to</span>
-      {{ routeSelect }}
-      <sc-if value="{{ changed }}" hint-placeholder-val="{{ false }}">
-        <div style="display:flex;gap:6px;margin-top:auto">
-          <button onClick="{{ reset }}" style="height:36px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:transparent;color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer">Reset</button>
-          <button onClick="{{ lockDock }}" style="flex:1;height:36px;padding:0 10px;border:0;border-radius:11px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">Review &amp; lock in</button>
-        </div>
-      </sc-if>
-    </div>
+    </sc-if>
   </footer>
 
   <sc-if value="{{ drawerKip }}" hint-placeholder-val="{{ false }}">
-    <aside data-screen-label="Ask Kip" style="position:absolute;top:76px;right:0;bottom:170px;width:400px;display:flex;flex-direction:column;background:var(--surface);border-left:1px solid var(--line);box-shadow:-24px 0 48px rgba(0,0,0,.14);z-index:30;animation:koinSlide .35s cubic-bezier(.2,.8,.2,1)">
+    <aside data-screen-label="Ask Kip" style="position:absolute;top:76px;right:0;bottom:128px;width:400px;display:flex;flex-direction:column;background:var(--surface);border-left:1px solid var(--line);box-shadow:-24px 0 48px rgba(0,0,0,.14);z-index:30;animation:koinSlide .35s cubic-bezier(.2,.8,.2,1)">
       <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)">
         <span style="width:40px;height:40px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center">{{ kipChat }}</span>
         <div style="display:flex;flex-direction:column"><span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:17px">Ask Kip</span><span style="font-size:11.5px;color:var(--muted)">{{ kipStatus }}</span></div>
@@ -496,7 +407,16 @@ input,button,select,textarea{font-family:inherit}
       <div ref="{{ chatRef }}" style="flex:1;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px">
         <sc-for list="{{ chat }}" as="msg" hint-placeholder-count="1">
           <sc-if value="{{ msg.isKip }}" hint-placeholder-val="{{ true }}">
-            <div style="align-self:flex-start;max-width:88%;display:flex;flex-direction:column;gap:6px">
+            <div style="align-self:flex-start;max-width:92%;display:flex;flex-direction:column;gap:6px">
+              <sc-if value="{{ msg.hasChain }}" hint-placeholder-val="{{ false }}">
+                <div data-screen-label="Agent chain" style="display:flex;flex-direction:column;gap:2px;padding:9px 11px;border-radius:12px;border:1px solid var(--line);background:var(--surface)">
+                  <span style="font-size:10px;font-weight:800;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;margin-bottom:3px">{{ msg.flow }}</span>
+                  <sc-for list="{{ msg.chain }}" as="ch" hint-placeholder-count="0">
+                    <div style="display:flex;gap:6px;align-items:baseline;font-size:11.5px;line-height:1.38;opacity:{{ ch.op }}"><span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:700;padding:1px 4px;border-radius:3px;background:{{ ch.kBg }};color:{{ ch.kFg }}">{{ ch.kind }}</span><span style="flex:none;font-weight:700">{{ ch.role }}:</span><span style="color:var(--muted)">{{ ch.note }}</span></div>
+                    <sc-if value="{{ ch.more }}" hint-placeholder-val="{{ false }}"><div style="padding-left:30px;font-size:10.5px;color:var(--muted)">↓ handed to {{ ch.next }}</div></sc-if>
+                  </sc-for>
+                </div>
+              </sc-if>
               <div style="padding:10px 13px;border-radius:16px 16px 16px 4px;background:var(--surface2);border:1px solid var(--line);font-size:13.5px;line-height:1.48;white-space:pre-wrap">{{ msg.text }}</div>
               <sc-if value="{{ msg.hasAction }}" hint-placeholder-val="{{ false }}">
                 <button onClick="{{ msg.onAction }}" style="align-self:flex-start;height:32px;padding:0 12px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">{{ msg.actionLabel }}</button>
@@ -555,7 +475,7 @@ input,button,select,textarea{font-family:inherit}
   </sc-if>
 
   <sc-if value="{{ drawerReceipts }}" hint-placeholder-val="{{ false }}">
-    <aside data-screen-label="Receipts" style="position:absolute;top:76px;right:0;bottom:170px;width:420px;display:flex;flex-direction:column;background:var(--surface);border-left:1px solid var(--line);box-shadow:-24px 0 48px rgba(0,0,0,.14);z-index:30;animation:koinSlide .35s cubic-bezier(.2,.8,.2,1)">
+    <aside data-screen-label="Receipts" style="position:absolute;top:76px;right:0;bottom:128px;width:420px;display:flex;flex-direction:column;background:var(--surface);border-left:1px solid var(--line);box-shadow:-24px 0 48px rgba(0,0,0,.14);z-index:30;animation:koinSlide .35s cubic-bezier(.2,.8,.2,1)">
       <div style="display:flex;align-items:center;gap:10px;padding:16px;border-bottom:1px solid var(--line)">
         <div style="display:flex;flex-direction:column"><span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:17px">Decision receipts</span><span style="font-size:11.5px;color:var(--muted)">Every review, its evidence and checks</span></div>
         <span style="flex:1"></span>
@@ -601,6 +521,191 @@ input,button,select,textarea{font-family:inherit}
     </aside>
   </sc-if>
 
+  <sc-if value="{{ drawerBalances }}" hint-placeholder-val="{{ false }}">
+    <aside data-screen-label="Balances" style="position:absolute;top:76px;right:0;bottom:128px;width:440px;display:flex;flex-direction:column;background:var(--bg);border-left:1px solid var(--line);box-shadow:-24px 0 48px rgba(0,0,0,.14);z-index:30;animation:koinSlide .35s cubic-bezier(.2,.8,.2,1)">
+      <div style="display:flex;align-items:center;gap:10px;padding:16px;border-bottom:1px solid var(--line);background:var(--surface)"><span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:18px">Balances &amp; bills</span><span style="flex:1"></span><button onClick="{{ closeDrawer }}" title="Close" style="width:30px;height:30px;border:0;border-radius:50%;background:var(--surface2);color:var(--ink);font-size:17px;cursor:pointer">×</button></div>
+      <div data-noscrolljack style="flex:1;min-height:0;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
+        <div data-screen-label="Where you stand" style="position:relative;flex:none;box-sizing:border-box;padding:18px 20px;display:flex;flex-direction:column;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s;z-index:2">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--muted)">{{ todayLabel }}</span><span style="flex:1"></span>
+            <button onClick="{{ howStand }}" style="height:24px;padding:0 9px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="color:var(--ink)">Where’s this from?</button>
+          </div>
+          <p style="margin:0;font-size:17px;line-height:1.5;text-wrap:pretty">You have <b style="font-family:'JetBrains Mono',monospace;font-size:15.5px">{{ stand.checking }}</b> in <span data-term="checking" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" style="border-bottom:1.5px dotted var(--water-line);cursor:help;outline:none">checking</span> and <b style="font-family:'JetBrains Mono',monospace;font-size:15.5px">{{ stand.savings }}</b> in <span data-term="savings" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" style="border-bottom:1.5px dotted var(--water-line);cursor:help;outline:none">savings</span>. You <span data-term="owe" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" onFocus="{{ showTip }}" onBlur="{{ hideTip }}" style="border-bottom:1.5px dotted var(--water-line);cursor:help;outline:none">owe</span> <b style="font-family:'JetBrains Mono',monospace;font-size:15.5px">{{ stand.owe }}</b> {{ stand.oweWhat }}.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+            <div style="padding:10px 12px;border-radius:14px;background:var(--surface2);display:flex;flex-direction:column;gap:3px">
+              <span data-term="networth" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="align-self:flex-start;font-size:11px;color:var(--muted);border-bottom:1px dotted var(--muted);cursor:help;outline:none">Net worth</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:600;color:{{ stand.nwTone }}">{{ stand.nw }}</span>
+            </div>
+            <div style="padding:10px 12px;border-radius:14px;background:var(--surface2);display:flex;flex-direction:column;gap:3px">
+              <span data-term="emergency" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="align-self:flex-start;font-size:11px;color:var(--muted);border-bottom:1px dotted var(--muted);cursor:help;outline:none">Emergency savings</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:600">{{ stand.cov }}</span>
+            </div>
+            <div style="padding:10px 12px;border-radius:14px;background:var(--surface2);display:flex;flex-direction:column;gap:3px">
+              <span data-term="lowest" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="align-self:flex-start;font-size:11px;color:var(--muted);border-bottom:1px dotted var(--muted);cursor:help;outline:none">Lowest ahead</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:600;color:{{ stand.lowTone }}">{{ stand.lowest }}</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <sc-for list="{{ stand.findings }}" as="fd" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;border-radius:11px;background:{{ fd.bg }}">
+                <span style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:{{ fd.dot }};width:42px;flex:none">{{ fd.kind }}</span>
+                <span style="font-size:12.5px;line-height:1.35">{{ fd.text }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="position:relative;flex:none;box-sizing:border-box;padding:18px 20px;display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s;z-index:2">
+          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--muted)">NEXT 30 DAYS</span></div>
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:700;letter-spacing:-.02em">Coming up</div>
+          <div style="display:flex;flex-direction:column">
+            <sc-for list="{{ upcoming }}" as="u" hint-placeholder-count="6">
+              <div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:12.5px">
+                <span style="width:46px;flex:none;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)">{{ u.date }}</span>
+                <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ u.label }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:{{ u.tone }}">{{ u.amt }}</span>
+                <span style="width:58px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)">{{ u.after }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:auto;font-size:11px;color:var(--muted)">Right column: checking after that day.</div>
+        </div>
+
+        <div data-screen-label="Habits breakdown" style="position:relative;flex:none;box-sizing:border-box;padding:18px 20px;display:flex;flex-direction:column;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s;z-index:2">
+          <div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--muted)">YOUR HABITS · PER MONTH</div>
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:700;letter-spacing:-.02em">Where {{ spend.total }} goes</div>
+          <div style="display:flex;flex-direction:column;gap:7px">
+            <sc-for list="{{ spend.rows }}" as="sr" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:112px 1fr 56px 44px;align-items:center;gap:8px;font-size:12.5px">
+                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sr.label }}</span>
+                <div style="position:relative;height:10px;border-radius:6px;background:var(--surface2)">
+                  <div style="position:absolute;left:0;top:0;bottom:0;width:{{ sr.pPlan }};border-radius:6px;border:1.5px dashed var(--muted);opacity:.45;box-sizing:border-box"></div>
+                  <div style="position:absolute;left:0;top:0;bottom:0;width:{{ sr.pSim }};border-radius:6px;background:var(--water-line);transition:width .5s cubic-bezier(.2,.8,.2,1)"></div>
+                </div>
+                <span style="font-family:'JetBrains Mono',monospace;font-weight:600;text-align:right">{{ sr.sim }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;color:{{ sr.dTone }}">{{ sr.dText }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:auto;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding-top:10px;border-top:1px solid var(--line)">
+            <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10.5px;color:var(--muted)">Take-home</span><span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600">{{ spend.income }}</span></div>
+            <div style="display:flex;flex-direction:column;gap:2px"><span data-term="essentials" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="align-self:flex-start;font-size:10.5px;color:var(--muted);border-bottom:1px dotted var(--muted);cursor:help;outline:none">Essential bills</span><span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600">{{ spend.essentials }}</span></div>
+            <div style="display:flex;flex-direction:column;gap:2px"><span data-term="leftover" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="align-self:flex-start;font-size:10.5px;color:var(--muted);border-bottom:1px dotted var(--muted);cursor:help;outline:none">Unassigned</span><span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:{{ spend.leftoverTone }}">{{ spend.leftover }}</span></div>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+  </sc-if>
+  <sc-if value="{{ drawerGoals }}" hint-placeholder-val="{{ false }}">
+    <aside data-screen-label="Goals" style="position:absolute;top:76px;right:0;bottom:128px;width:440px;display:flex;flex-direction:column;background:var(--bg);border-left:1px solid var(--line);box-shadow:-24px 0 48px rgba(0,0,0,.14);z-index:30;animation:koinSlide .35s cubic-bezier(.2,.8,.2,1)">
+      <div style="display:flex;align-items:center;gap:10px;padding:16px;border-bottom:1px solid var(--line);background:var(--surface)"><span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:18px">Goals &amp; plan</span><span style="flex:1"></span><button onClick="{{ closeDrawer }}" title="Close" style="width:30px;height:30px;border:0;border-radius:50%;background:var(--surface2);color:var(--ink);font-size:17px;cursor:pointer">×</button></div>
+      <div data-noscrolljack style="flex:1;min-height:0;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
+        <div data-screen-label="Your goals" style="position:relative;flex:none;box-sizing:border-box;padding:16px 18px;display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s;z-index:2">
+          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--accent)">YOUR GOALS</span><span style="flex:1"></span>
+            <button onClick="{{ howGoals }}" title="How do goals change the stream?" style="width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer">?</button></div>
+          <div style="display:flex;align-items:center;gap:8px"><div style="width:44px;flex:none">{{ kipHub }}</div><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:700;letter-spacing:-.02em;line-height:1.15">Tell Kip what you’re aiming for</span></div>
+          <div style="display:flex;gap:6px">
+            <input value="{{ goalInput }}" onChange="{{ setGoalInput }}" onKeyDown="{{ goalKey }}" placeholder="e.g. Pay off my car loan, $9k at 7%" style="flex:1;min-width:0;height:38px;padding:0 12px;border:1.5px solid var(--line);border-radius:11px;background:var(--surface2);color:var(--ink);font-size:12.5px;outline:none">
+            <button onClick="{{ goalSend }}" title="Send to Kip" style="width:38px;height:38px;border:0;border-radius:11px;background:var(--accent);color:#fff;font-size:17px;font-weight:700;cursor:pointer">→</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px">
+            <sc-for list="{{ goalExamples }}" as="ge" hint-placeholder-count="3">
+              <button onClick="{{ ge.onClick }}" style="padding:4px 9px;border:1px dashed var(--line);border-radius:999px;background:transparent;color:var(--ink);font-size:11px;cursor:pointer;white-space:nowrap" style-hover="background:var(--surface2)">{{ ge.text }}</button>
+            </sc-for>
+          </div>
+          <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;border-top:1px solid var(--line)">
+            <sc-for list="{{ hubGoals }}" as="hg" hint-placeholder-count="2">
+              <button onClick="{{ hg.onClick }}" style="display:flex;align-items:center;gap:8px;padding:5px 2px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font-size:12.5px;cursor:pointer;text-align:left" style-hover="background:var(--surface2)"><span style="width:8px;height:8px;border-radius:50%;background:{{ hg.color }};flex:none"></span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ hg.name }}</span><span style="font-size:11px;color:var(--muted)">{{ hg.verb }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:600">{{ hg.date }}</span></button>
+            </sc-for>
+          </div>
+        </div>
+
+        <sc-for list="{{ goalCards }}" as="gc" hint-placeholder-count="2">
+          <div data-screen-label="Goal card" style="position:relative;flex:none;box-sizing:border-box;padding:14px 18px 16px;display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-top:4px solid {{ gc.color }};border-radius:22px;box-shadow:var(--shadow);transition:left .7s cubic-bezier(.3,1.2,.4,1),background .45s;z-index:2">
+            <div style="display:flex;align-items:center;gap:7px;min-height:20px"><span style="width:8px;height:8px;border-radius:50%;background:{{ gc.color }}"></span><span style="font-size:10.5px;font-weight:800;letter-spacing:.08em;color:{{ gc.color }}">{{ gc.typeLabel }}</span><span style="flex:1"></span>
+              <sc-if value="{{ gc.removable }}" hint-placeholder-val="{{ false }}"><button onClick="{{ gc.remove }}" title="Remove goal" style="width:22px;height:22px;border:0;border-radius:50%;background:var(--surface2);color:var(--muted);font-size:14px;line-height:1;cursor:pointer">×</button></sc-if></div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:19px;font-weight:700;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ gc.name }}</div>
+            <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:11.5px;color:var(--muted)">{{ gc.verb }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;letter-spacing:-.03em">{{ gc.bigDate }}</span><sc-if value="{{ gc.dShow }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:700;color:{{ gc.dTone }}">{{ gc.d }}</span></sc-if></div>
+            <sc-if value="{{ gc.isSave }}" hint-placeholder-val="{{ true }}"><div style="height:8px;border-radius:6px;background:var(--surface2);overflow:hidden"><div style="height:100%;width:{{ gc.pct }};background:{{ gc.color }};border-radius:6px"></div></div></sc-if>
+            <span style="font-size:11.5px;color:var(--muted)">{{ gc.progressText }}</span>
+            <sc-if value="{{ gc.idle }}" hint-placeholder-val="{{ true }}">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                <div style="padding:6px 9px;border-radius:10px;background:var(--surface2)"><div style="font-size:10.5px;color:var(--muted)">Monthly</div><div style="font-family:'JetBrains Mono',monospace;font-size:13.5px;font-weight:600">{{ gc.monthly }}</div></div>
+                <div style="padding:6px 9px;border-radius:10px;background:var(--surface2)"><div style="font-size:10.5px;color:var(--muted)">{{ gc.thirdLabel }}</div><div style="font-family:'JetBrains Mono',monospace;font-size:13.5px;font-weight:600">{{ gc.third }}</div></div>
+              </div>
+              <div style="font-size:12px;color:var(--muted)">Time to go: <b style="color:var(--ink);font-weight:700">{{ gc.duration }}</b></div>
+            </sc-if>
+            <sc-if value="{{ gc.reviewing }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:14px;background:var(--surface2)">
+                <sc-for list="{{ gc.steps }}" as="st" hint-placeholder-count="0"><div style="display:flex;align-items:center;gap:8px;opacity:{{ st.op }}"><span style="width:8px;height:8px;border-radius:50%;background:{{ st.dot }}"></span><span style="font-size:12.5px;font-weight:600">{{ st.role }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;padding:2px 5px;border-radius:4px;background:{{ st.kBg }};color:{{ st.kFg }}">{{ st.kind }}</span><span style="flex:1"></span><span style="font-size:11px;color:var(--muted)">{{ st.stateLabel }}</span></div></sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ gc.done }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:{{ gc.vBg }};color:{{ gc.vTone }}">{{ gc.verdict }}</span><button onClick="{{ howApprove }}" style="border:0;background:transparent;color:var(--muted);font-size:11.5px;text-decoration:underline;cursor:pointer;padding:0">What does approving do?</button></div>
+              <p data-noscrolljack style="margin:0;font-size:12px;line-height:1.42;max-height:76px;overflow-y:auto;text-wrap:pretty">{{ gc.summary }}</p>
+              <div style="display:flex;gap:8px">
+                <sc-if value="{{ gc.ok }}" hint-placeholder-val="{{ false }}"><button onClick="{{ gc.approve }}" style="height:36px;padding:0 14px;border:0;border-radius:11px;background:var(--good);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">Approve change</button></sc-if>
+                <button onClick="{{ gc.cancel }}" style="height:36px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:transparent;color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer">Back</button>
+              </div>
+            </sc-if>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:auto">
+              <button onClick="{{ gc.down }}" style="height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="background:var(--surface2)">−$25</button>
+              <button onClick="{{ gc.up }}" style="height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="background:var(--surface2)">+$25</button>
+              <span style="flex:1"></span>
+              <sc-if value="{{ gc.showReview }}" hint-placeholder-val="{{ false }}"><button onClick="{{ gc.review }}" style="height:30px;padding:0 12px;border:0;border-radius:10px;background:var(--ink);color:var(--bg);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Review change</button></sc-if>
+            </div>
+            <sc-if value="{{ gc.showNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;line-height:1.4;color:var(--muted);text-wrap:pretty">{{ gc.note }}</div></sc-if>
+            <sc-if value="{{ gc.hasRouted }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:14px;right:44px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--good-soft);color:var(--good)">{{ gc.routed }}</span></sc-if>
+          </div>
+        </sc-for>
+
+        <div data-screen-label="A year from now" style="position:relative;flex:none;box-sizing:border-box;padding:18px 20px;display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);transition:background .45s;z-index:2">
+          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--muted)">{{ yearLabel }}</span></div>
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:700;letter-spacing:-.02em"><span data-term="networth12" tabIndex="0" onMouseEnter="{{ showTip }}" onMouseLeave="{{ hideTip }}" style="border-bottom:1.5px dotted var(--muted);cursor:help;outline:none">Net worth in a year</span></div>
+          <div style="display:flex;align-items:baseline;gap:10px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:600;letter-spacing:-.04em;color:var(--info)">{{ year.nw12 }}</span>
+            <sc-if value="{{ year.dShow }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-weight:700;color:{{ year.dTone }}">{{ year.d }} vs plan</span></sc-if>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+            <div style="padding:8px 10px;border-radius:12px;background:var(--surface2)"><div style="font-size:10.5px;color:var(--muted)">Today</div><div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600">{{ year.nwNow }}</div></div>
+            <div style="padding:8px 10px;border-radius:12px;background:var(--surface2)"><div style="font-size:10.5px;color:var(--muted)">Savings</div><div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600">{{ year.sav12 }}</div></div>
+            <div style="padding:8px 10px;border-radius:12px;background:var(--surface2)"><div style="font-size:10.5px;color:var(--muted)">Emergency</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;line-height:1.3">{{ year.cov12 }}</div></div>
+          </div>
+          <sc-if value="{{ year.changed }}" hint-placeholder-val="{{ false }}">
+            <sc-if value="{{ year.idle }}" hint-placeholder-val="{{ true }}">
+              <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px;border-radius:14px;background:var(--you-bg)">
+                <span style="flex:1;font-size:12.5px;color:var(--you-fg);font-weight:600">Like where this is heading? Make these habits your plan.</span>
+                <button onClick="{{ lockReview }}" style="height:36px;padding:0 14px;border:0;border-radius:11px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap">Review &amp; lock in</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ year.reviewing }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:14px;background:var(--surface2)">
+                <sc-for list="{{ year.steps }}" as="st" hint-placeholder-count="0">
+                  <div style="display:flex;align-items:center;gap:8px;opacity:{{ st.op }}"><span style="width:8px;height:8px;border-radius:50%;background:{{ st.dot }}"></span><span style="font-size:12.5px;font-weight:600">{{ st.role }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;padding:2px 5px;border-radius:4px;background:{{ st.kBg }};color:{{ st.kFg }}">{{ st.kind }}</span><span style="flex:1"></span><span style="font-size:11px;color:var(--muted)">{{ st.stateLabel }}</span></div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ year.done }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">
+                <sc-for list="{{ year.rows }}" as="r" hint-placeholder-count="0">
+                  <div style="display:flex;gap:8px;font-size:12px"><span style="flex:1;color:var(--muted)">{{ r.label }}</span><span style="font-family:'JetBrains Mono',monospace;color:var(--muted)">{{ r.before }}</span><span style="color:var(--muted)">→</span><span style="font-family:'JetBrains Mono',monospace;font-weight:700">{{ r.after }}</span></div>
+                </sc-for>
+                <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+                  <span style="font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:{{ year.vBg }};color:{{ year.vTone }}">{{ year.verdict }}</span><span style="flex:1"></span>
+                  <sc-if value="{{ year.ok }}" hint-placeholder-val="{{ false }}"><button onClick="{{ lockApprove }}" style="height:36px;padding:0 14px;border:0;border-radius:11px;background:var(--good);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">Approve</button></sc-if>
+                  <button onClick="{{ lockCancel }}" style="height:36px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:transparent;color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer">Back</button>
+                </div>
+              </div>
+            </sc-if>
+          </sc-if>
+          <sc-if value="{{ year.showHint }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:auto;font-size:12px;color:var(--muted);line-height:1.45">Drag habits or tell Kip a goal, and watch this number move.</div>
+          </sc-if>
+        </div>
+      </div>
+    </aside>
+  </sc-if>
   <sc-if value="{{ setupOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeSetup }}" style="position:absolute;inset:0;background:rgba(6,18,23,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:50">
       <div onClick="{{ stop }}" data-screen-label="Data and goals" style="width:720px;max-height:92%;display:flex;flex-direction:column;gap:16px;padding:24px 26px;border-radius:24px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);animation:koinPop .3s ease">
@@ -667,12 +772,12 @@ input,button,select,textarea{font-family:inherit}
   </sc-if>
 
   <sc-if value="{{ toast.show }}" hint-placeholder-val="{{ false }}">
-    <div style="position:absolute;left:50%;bottom:186px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:13px;font-weight:600;box-shadow:var(--shadow);z-index:80;animation:koinPop .3s ease;white-space:nowrap">{{ toast.text }}</div>
+    <div style="position:absolute;left:50%;bottom:144px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:13px;font-weight:600;box-shadow:var(--shadow);z-index:80;animation:koinPop .3s ease;white-space:nowrap">{{ toast.text }}</div>
   </sc-if>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script>
-const LAYOUT = { padL: 40, pxPast: 32, pxDay: 58, pxMonth: 190, chartTop: 52, chartH: 228, stageH: 654, cardsTop: 318, padR: 130, dockKip: 80, hubW: 340, goalW: 300, yearW: 400, anchors: { stand: 259, low: 659 } };
+const LAYOUT = { padL: 40, pxPast: 32, pxDay: 58, pxMonth: 190, chartTop: 52, chartH: 500, stageH: 654, cardsTop: 318, padR: 130, dockKip: 64, hubW: 340, goalW: 300, yearW: 400, anchors: { stand: 259, low: 659 } };
 const BASE_W = 1360, BASE_H = 900;
 class Component extends DCLogic {
   state = {};

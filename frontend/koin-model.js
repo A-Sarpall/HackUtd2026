@@ -25,12 +25,26 @@ const LEVERS = [
   { id: 'shopping', label: 'Shopping', base: 210, min: 0, max: 500, step: 10, kind: 'spend' },
   { id: 'subs', label: 'Subscriptions', base: 64, min: 0, max: 150, step: 1, kind: 'spend' },
   { id: 'side', label: 'Side income', base: 0, min: 0, max: 1000, step: 25, kind: 'income' },
-  { id: 'extraDebt', label: 'Extra card payment', base: 0, min: 0, max: 500, step: 10, kind: 'plan' },
-  { id: 'goal', label: 'Emergency fund', base: 300, min: 0, max: 800, step: 10, kind: 'plan' },
+  { id: 'extraDebt', label: 'Extra card payment', base: 0, min: 0, max: 5000, step: 10, kind: 'plan' },
+  { id: 'goal', label: 'Emergency fund', base: 300, min: 0, max: 5000, step: 10, kind: 'plan' },
 ];
 const BASE = Object.fromEntries(LEVERS.map(l => [l.id, l.base]));
+/* Flexible spending: one control for dining, coffee, rides, shopping and subscriptions. Groceries stay with essentials. */
+const FLEX = ['dining', 'coffee', 'rides', 'shopping', 'subs'];
+const FLEX_MAX = FLEX.reduce((a, k) => a + LEVERS.find(l => l.id === k).max, 0);
+const flexOf = lv => FLEX.reduce((a, k) => a + lv[k], 0);
+// Splits a new total across the categories in their current proportions (or the usual ones when all are zero).
+function splitFlex(target, lv) {
+  const cur = flexOf(lv), baseSum = FLEX.reduce((a, k) => a + BASE[k], 0), out = {}; let left = target;
+  FLEX.forEach((k, i) => { const L = LEVERS.find(l => l.id === k), w = cur > 0 ? lv[k] / cur : BASE[k] / baseSum;
+    const v = Math.max(L.min, Math.min(L.max, i === FLEX.length - 1 ? left : Math.round(target * w))); out[k] = v; left -= v; });
+  return out;
+}
 const DISC = ['dining', 'groceries', 'coffee', 'rides', 'shopping'];
-const PROFILE = { checking: 1520, savings: 600, owe: 2000, apr: 24, minPay: 60, income: 3000, rent: 900, utilities: 100, cushion: 200, goalName: 'Emergency fund', goalTarget: 3000 };
+const PROFILE = { checking: 1520, savings: 600, owe: 2000, apr: 24, minPay: 60, income: 3000, payEvery: 'semimonthly', nextPay: '2026-11-14', oneTime: [], rent: 900, utilities: 100, cushion: 200, goalName: 'Emergency fund', goalTarget: 3000 };
+/* Paychecks per month for each pay schedule; take-home pay is stored per month. */
+const PAY_FACTOR = { weekly: 52 / 12, biweekly: 26 / 12, semimonthly: 2, monthly: 1 };
+const PAY_TEXT = { weekly: 'every week', biweekly: 'every 2 weeks', semimonthly: 'twice a month', monthly: 'every month' };
 const TYPES = {
   emergency: { kind: 'save', name: 'Emergency fund', label: 'Safety net', c: 'g1' },
   vacation: { kind: 'save', name: 'Vacation fund', label: 'Vacation', c: 'g2' },
@@ -78,7 +92,7 @@ function fromSnapshot(snap, customer) {
     accounts: (snap.provider || {}).accounts || (snap.accounts || []).length };
   const P = { checking: c(snap.openingCents), savings: c(snap.savingsCents) || 0, owe: c(snap.liabilitiesCents) || 0, apr: null,
     minPay: !cards && loanPays.length && loanPays.every(Number.isSafeInteger) ? loanPays.reduce((a, b) => a + b, 0) / 100 : null,
-    income: null, rent: 0, utilities: 0, cushion: c(snap.cashFloorCents) || 0, goalName: 'Emergency fund', goalTarget: 3000, debtName: 'Cards & loans' };
+    income: null, payEvery: null, nextPay: null, oneTime: [], rent: 0, utilities: 0, cushion: c(snap.cashFloorCents) || 0, goalName: 'Emergency fund', goalTarget: 3000, debtName: 'Cards & loans' };
   return { src, P };
 }
 const PAST = [{ date: '2026-10-31', label: 'Payday', amt: 1500 }, { date: '2026-11-03', label: 'Subscriptions', amt: -64 }, { date: '2026-11-04', label: 'Car repair', amt: -412 }];
@@ -128,13 +142,21 @@ function planFlowsFor(lv, P, gs, demo, rent) {
   const f = [], add = (id, label, k, c, every, gid) => { if (c !== 0) f.push({ id, label, k, cents: c, every, gid }); };
   add('habits', 'Everyday spending', 'daily', -cents(DISC.reduce((a, k) => a + lv[k], 0) / 30), 'day');
   add('side', 'Side income', 'daily', cents(lv.side / 30), 'day');
-  if (demo) { add('rent', 'Rent', 'bill', -cents(rent), 10); add('utilities', 'Utilities', 'bill', -cents(P.utilities), 11); add('pay14', 'Payday', 'pay', cents((P.income || 0) / 2), 14); add('pay28', 'Payday', 'pay', cents((P.income || 0) / 2), 28); }
-  else add('income', 'Take-home pay', 'daily', cents((P.income || 0) / 30), 'day');
+  if (demo) { add('rent', 'Rent', 'bill', -cents(rent), 10); add('utilities', 'Utilities', 'bill', -cents(P.utilities), 11); }
+  if (P.income > 0 && PAY_FACTOR[P.payEvery] && P.nextPay) {
+    const per = cents(P.income / PAY_FACTOR[P.payEvery]), a = D(P.nextPay).getUTCDate();
+    if (P.payEvery === 'weekly' || P.payEvery === 'biweekly') add('pay', 'Payday', 'pay', per, { start: P.nextPay, days: P.payEvery === 'weekly' ? 7 : 14 });
+    else { add('pay-a', 'Payday', 'pay', per, a); if (P.payEvery === 'semimonthly') add('pay-b', 'Payday', 'pay', per, a <= 14 ? a + 14 : a - 14); }
+  } else add('income', 'Take-home pay', 'daily', cents((P.income || 0) / 30), 'day');
+  (P.oneTime || []).forEach(o => add('once-' + o.id, o.label, 'pay', cents(o.amount), { date: o.date }));
   add('subs', 'Subscriptions', 'bill', -cents(lv.subs), 3);
   gs.forEach(x => { if (x.g.kind === 'payoff' && x.bal > 0.005 && x.mBase > 0) add('debt-' + x.g.id, x.g.name + ' payment', 'debt', -cents(Math.min(x.mBase, x.bal + x.bal * (x.g.apr || 0) / 1200)), 20, x.g.id); });
   return f;
 }
 const GOAL_DAY = 15;
+// Same rule as the server: every day, a day of the month, or every 7 or 14 days from a start date.
+const flowOn = (fl, date, dom) => fl.every === 'day' || fl.every === dom || (typeof fl.every === 'object' && (fl.every.date ? fl.every.date === date : between(fl.every.start, date) >= 0 && between(fl.every.start, date) % fl.every.days === 0));
+const payText = P => P.income > 0 && PAY_FACTOR[P.payEvery] && P.nextPay ? money(P.income / PAY_FACTOR[P.payEvery]) + ' ' + PAY_TEXT[P.payEvery] + ' · next ' + fDay(P.nextPay) : P.income > 0 ? money(P.income) + ' a month, spread evenly (no pay dates set)' : '';
 
 function compute(lv, P, goalsIn, route, extras, usePlan, horizonMonths) {
   extras = extras || [];
@@ -152,7 +174,7 @@ function compute(lv, P, goalsIn, route, extras, usePlan, horizonMonths) {
   for (let i = 0; i < 30; i++) {
     // Money out is counted before money in on the same day, as the server does. Amounts are whole cents.
     const date = addDays(TODAY, i), dom = D(date).getUTCDate(); const ev = []; let outs = 0, ins = 0;
-    flows.forEach(fl => { if (fl.every !== 'day' && fl.every !== dom) return; const amt = fl.cents / 100; if (amt < 0) outs += amt; else ins += amt;
+    flows.forEach(fl => { if (!flowOn(fl, date, dom)) return; const amt = fl.cents / 100; if (amt < 0) outs += amt; else ins += amt;
       if (fl.k !== 'daily') ev.push({ k: fl.k, label: fl.label, amt });
       if (fl.gid) { const x = gs.find(y => y.g.id === fl.gid); x.bal = x.bal + x.bal * (x.g.apr || 0) / 1200 + amt; } });
     if (!demo) SRC.bills.forEach(b => { if (b.date === date) { ev.push({ k: 'bill', label: b.label, amt: b.amt }); outs += b.amt; } });
@@ -168,7 +190,8 @@ function compute(lv, P, goalsIn, route, extras, usePlan, horizonMonths) {
   const d29 = days[29].date; const nw29 = nwOf(bal);
   const months = []; const H = horizonMonths || 11;
   for (let m = 1; m <= H; m++) {
-    bal += inc + lv.side - rent - P.utilities - bills - lv.subs - disc;
+    const mFrom = addMonths(d29, m - 1), mTo = addMonths(d29, m);
+    bal += inc + lv.side - rent - P.utilities - bills - lv.subs - disc + (P.oneTime || []).filter(o => o.date > mFrom && o.date <= mTo).reduce((a, o) => a + o.amount, 0);
     gs.forEach(x => {
       if (x.g.kind === 'save' && x.m > 0 && x.saved < x.g.target) { const c = Math.min(x.m, x.g.target - x.saved); x.saved += c; bal -= c; }
       if (x.g.kind === 'payoff' && x.bal > 0.005 && x.m > 0) { const it = x.bal * x.g.apr / 1200; const p = Math.min(x.m, x.bal + it); x.bal = x.bal + it - p; bal -= p; }
@@ -421,6 +444,8 @@ function kipSays(s, sim, plan, P) {
   const lev = LEVERS.find(l => l.id === s.lastLever);
   const rg = sim.goals.find(g => g.id === s.route);
   const routeTxt = rg ? 'Routed to your ' + rg.name.toLowerCase() + ' from next month.' : 'It stays in checking, so the water rises.';
+  if (s.lastLever === 'flex') { const now = flexOf(s.lv), d = now - flexOf(s.plan); if (d === 0) return moodLine(sim, P);
+    return d < 0 ? 'Flexible spending at ' + money(now) + ' a month frees ' + money(-d) + '. That’s ' + money(-d * 12) + ' a year. ' + routeTxt : 'Flexible spending up ' + money(d) + ' a month. Ripple alert: that’s ' + money(d * 12) + ' a year.'; }
   if (!lev) return (s.lastLever === 'route' ? 'Freed-up cash now flows to ' + (rg ? rg.name.toLowerCase() : 'checking') + '. ' : 'Hi, I’m Kip! Drag any habit, or tell me a goal, and watch the stream change. ') + moodLine(sim, P);
   const v = s.lv[lev.id], d = v - s.plan[lev.id];
   if (d === 0) return moodLine(sim, P);
@@ -447,15 +472,15 @@ function stepRows(list, active) {
 const DEF = { theme: 'light', lv: BASE, plan: BASE, route: 'cash', P: PROFILE, goals: GOALS0, planned: [], pay: { amount: '300', dateIdx: 0, phase: 'idle', step: 0 }, payHover: false,
   goalRev: { id: null, phase: 'idle', step: 0 }, lockRev: { phase: 'idle', step: 0 }, hover: null, scrollX: 0, lastLever: null, ripple: 0, drawer: null, setup: false, how: null, tip: null, goalText: '',
   receipts: SEED_RECEIPTS, openRec: null, chat: [{ role: 'kip', text: 'Hey! I’m Kip, your money sidekick. Ask me anything, or tell me a goal like “pay off my student loans” and I’ll add it to your stream.' }], chatInput: '', chatBusy: false, chatStep: 0, traceOpen: -1, toast: null, src: DEMO_SRC, srcState: { status: 'idle', customers: [], message: '' },
-  srv: { status: 'connecting', pending: false, minCash: null, message: '' } };
+  srv: { status: 'connecting', pending: false, minCash: null, message: '' }, whatIf: null, lowOpen: false, breakdown: false, incomeEdit: null };
 
 /* ---------- NextMove server receipts → Koin steps ---------- */
 const AI_ROLES = ['Coordinator', 'Strategist', 'Coach'];
 const MODEL_TEXT = { Coordinator: 'Read your message and chose what to check', Strategist: 'Picked a verified option', Coach: 'Wrote the answer with verified figures' };
-const TOOL_TEXT = { compare_scenarios: 'Compared the payment options', cash_floor_check: 'Checked your safety cushion', compare_payment: 'Re-ran your outlook with the payment', project_goal: 'Projected the goal at the new amount',
+const TOOL_TEXT = { project_income: 'Worked out your monthly take-home', compare_scenarios: 'Compared the payment options', cash_floor_check: 'Checked your safety cushion', compare_payment: 'Re-ran your outlook with the payment', project_goal: 'Projected the goal at the new amount',
   monthly_budget_check: 'Checked your monthly budget', snapshot_facts: 'Pulled your verified numbers', project_new_goal: 'Projected the new goal' };
 function traceSteps(rc) {
-  const out = (rc.trace || []).map(t => { const text = t.tool === 'model' ? MODEL_TEXT[t.role] || 'Model step' : TOOL_TEXT[t.tool] || (t.tool.indexOf('answer_') === 0 ? 'Pulled your ' + t.tool.slice(7) + ' figures' : t.tool);
+  const out = (rc.trace || []).map(t => { const text = t.note ? t.note : t.tool === 'model' ? MODEL_TEXT[t.role] || 'Model step' : TOOL_TEXT[t.tool] || (t.tool.indexOf('answer_') === 0 ? 'Pulled your ' + t.tool.slice(7) + ' figures' : t.tool);
     return [t.role, AI_ROLES.includes(t.role) ? 'AI' : 'CODE', text + (t.status === 'rejected_requested' ? ': the amount you asked for was blocked' : '')]; });
   if (rc.provenance && rc.provenance.mode === 'deterministic') out.push(['Coach', 'AI', 'Skipped: AI isn’t configured on the server, so this uses fixed calculator wording', true]);
   return out;
@@ -504,6 +529,44 @@ function handlers(c) {
   };
   H.removeGoalByName = name => { const s = S(); const n = String(name || '').toLowerCase(); const g = s.goals.find(x => !x.fixed && (x.name || '').toLowerCase().indexOf(n) >= 0 || (!x.fixed && n.indexOf((x.name || '').toLowerCase()) >= 0)); if (!g) return { ok: false, error: 'No matching goal you added.' }; H.removeGoal(g.id)(); return { ok: true, removed: g.name }; };
   H.toggleTheme = () => set({ theme: S().theme === 'dark' ? 'light' : 'dark' });
+  /* ---- stream-first layout: sheets, what-if panel, lowest-point callout, pay schedule, macro sliders ---- */
+  H.openSheet = k => memo('sh' + k, () => set({ drawer: S().drawer === k ? null : k, openRec: null }));
+  H.whatIf = k => memo('wi' + k, () => { if (k === 'save') { set({ whatIf: null, drawer: 'goals' }); return; } set({ whatIf: S().whatIf === k ? null : k, incomeEdit: null, lowOpen: false }); });
+  H.closeWhatIf = () => set({ whatIf: null, pay: Object.assign({}, S().pay, { phase: 'idle' }) });
+  H.toggleLow = () => set({ lowOpen: !S().lowOpen });
+  H.askLow = () => { set({ lowOpen: false }); H.send('Why is ' + fDay(c._lowDate) + ' my lowest day?'); };
+  H.toggleBreakdown = () => set({ breakdown: !S().breakdown });
+  H.applySplit = () => { const s = S(), plan = s.srv.surplus; if (!plan) return;
+    if (c._changed) { H.toast('Lock in or reset your current slider changes first.'); return; }
+    const lv = Object.assign({}, s.lv); let goals = s.goals.slice();
+    plan.items.forEach(x => { const add = x.cents / 100;
+      if (x.id === 'card') lv.extraDebt = Math.min(LEVERS.find(l => l.id === 'extraDebt').max, lv.extraDebt + add);
+      else if (x.id === 'emergency') lv.goal = Math.min(LEVERS.find(l => l.id === 'goal').max, lv.goal + add);
+      else goals = goals.map(g => g.id === x.id ? Object.assign({}, g, { monthly: g.monthly + add }) : g); });
+    set({ lv, goals, whatIf: null, lastLever: null, ripple: (s.ripple || 0) + 1 });
+    H.toast('Split applied to your sliders. Review each change before you approve it.'); };
+  H.askSplit = () => { set({ whatIf: null }); H.send('I have extra money each month. How much should I put toward each payment and goal?'); };
+  // Pay schedule. Take-home pay is stored per month; the editor works in single paychecks.
+  H.editIncome = () => { const P = S().P, every = P.payEvery || 'biweekly';
+    set({ whatIf: null, lowOpen: false, incomeEdit: { mode: 'pay', amount: P.income > 0 ? String(Math.round(P.income / PAY_FACTOR[every])) : '', every, next: P.nextPay && P.nextPay >= TODAY ? P.nextPay : addDays(TODAY, 7), onceAmount: '', onceDate: TODAY, onceLabel: '' } }); };
+  H.incomeMode = m => memo('im' + m, () => set({ incomeEdit: Object.assign({}, S().incomeEdit, { mode: m }) }));
+  H.incomeField = k => memo('if' + k, e => { const v = k === 'amount' || k === 'onceAmount' ? e.target.value.replace(/[^0-9]/g, '').slice(0, 6) : e.target.value; set({ incomeEdit: Object.assign({}, S().incomeEdit, { [k]: v }) }); });
+  H.setPay = (perCheck, every, next) => { const P = S().P;
+    set({ P: Object.assign({}, P, { income: perCheck > 0 ? perCheck * PAY_FACTOR[every] : null, payEvery: every, nextPay: next || null }), incomeEdit: null, lastLever: null, ripple: (S().ripple || 0) + 1 }); H.pushProfile(); };
+  // One-time money (a bonus, refund or gift) raises the stream from its date. It never repeats.
+  H.addOnce = (amount, date, label) => { const P = S().P;
+    set({ P: Object.assign({}, P, { oneTime: (P.oneTime || []).concat([{ id: Date.now().toString(36), amount, date, label: (label || 'One-time money').slice(0, 40) }]) }), incomeEdit: null, lastLever: null, ripple: (S().ripple || 0) + 1 }); H.pushProfile(); };
+  H.removeOnce = id => memo('ro' + id, () => { const P = S().P; set({ P: Object.assign({}, P, { oneTime: (P.oneTime || []).filter(o => o.id !== id) }) }); H.pushProfile(); H.toast('Removed.'); });
+  H.saveIncome = () => { const e = S().incomeEdit; if (!e) return;
+    if (e.mode === 'once') { const amt = +e.onceAmount;
+      if (!(amt > 0) || !/^\d{4}-\d\d-\d\d$/.test(e.onceDate || '') || e.onceDate < TODAY) { H.toast('Enter an amount and a date from today on.'); return; }
+      H.addOnce(amt, e.onceDate, e.onceLabel.trim()); H.toast('Added. Your stream rises on ' + fDay(e.onceDate) + '.'); return; }
+    const amt = +e.amount;
+    if (!(amt > 0) || !/^\d{4}-\d\d-\d\d$/.test(e.next || '')) { H.toast('Enter a paycheck amount and your next payday.'); return; }
+    H.setPay(amt, e.every, e.next); H.toast('Paydays added to your stream.'); };
+  H.cancelIncome = () => set({ incomeEdit: null });
+  H.takeHome = e => { const v = +e.target.value; set({ P: Object.assign({}, S().P, { income: v > 0 ? v : null }), lastLever: null }); H.pushProfile(600); };
+  H.flex = e => { const target = +e.target.value; c.setState(st => { const s = Object.assign({}, DEF, st); return Object.assign({ lv: Object.assign({}, s.lv, splitFlex(target, s.lv)), lastLever: 'flex', ripple: s.ripple + 1 }, idle); }); };
   H.scrollRef = el => {
     if (!el || el === c._scroller) return; c._scroller = el; c._vw = el.clientWidth;
     el.addEventListener('wheel', e => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && !e.target.closest('[data-noscrolljack]')) { el.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
@@ -588,7 +651,7 @@ function handlers(c) {
     H.addReceipt({ title: 'Habit plan · ' + (g ? g.summary : 'updated'), verdict: 'Approved', tone: 'good', kind: 'Habit review', facts: g ? g.facts : [], checks: [['Stays above safety cushion', true], ['Fits your monthly budget', true], ['Approved once by you', true]], steps: g ? g.stepsRaw : [], note: 'Calculator check. Your new habits are now the plan everything compares against.' });
     H.toast('Locked in! These habits are your new plan.'); };
   H.lockCancel = () => set({ lockRev: { phase: 'idle', step: 0 } });
-  H.lockDock = x => memo('ld' + x, () => { H.lockReview(); H.jump(x)(); });
+  H.lockDock = () => { set({ drawer: 'goals' }); H.lockReview(); };
   H.openKip = () => set({ drawer: S().drawer === 'kip' ? null : 'kip' });
   H.openReceipts = () => set({ drawer: S().drawer === 'receipts' ? null : 'receipts', openRec: null });
   H.closeDrawer = () => set({ drawer: null });
@@ -607,7 +670,7 @@ function handlers(c) {
   const setSrv = p => c.setState(st => ({ srv: Object.assign({}, st.srv || DEF.srv, p) }));
   // Record the server snapshot Koin is in step with; planned payments come from the server.
   const adopt = snap => { c._snap = { id: snap.id, version: snap.version }; set({ planned: (snap.plannedPayments || []).map(p => ({ id: p.id, amount: p.amountCents / 100, date: p.date })) });
-    setSrv({ status: 'ready', minCash: snap.forecast ? snap.forecast.minCashCents : null, message: '' }); };
+    setSrv({ status: 'ready', minCash: snap.forecast ? snap.forecast.minCashCents : null, surplus: snap.surplusPlan || null, message: '' }); };
   // Saves the approved plan as the server profile. Calls coalesce; flush() waits for the latest save.
   H.pushProfile = delay => { c._dirty = true; setSrv({ pending: true }); clearTimeout(c._pushT); c._pushT = setTimeout(H.flush, delay || 0); };
   H.flush = () => { clearTimeout(c._pushT); if (c._flushing) return c._flushing.then(() => c._dirty ? H.flush() : null);
@@ -705,9 +768,10 @@ function handlers(c) {
     c.setState(st => ({ chat: (st.chat || chat).concat([Object.assign({ role: 'kip', trace: true }, msg)]), chatBusy: false, chatStep: 5 })); H.chatScroll();
   };
   H.kipFromReceipt = (rc, text) => {
-    const steps = traceSteps(rc), msg = { text: rc.summary, steps, src: srcLabel(rc), live: true };
+    const steps = traceSteps(rc), msg = { text: rc.summary, steps, chain: steps, src: srcLabel(rc), live: true, trace: false };
     if (rc.kind === 'propose_goal' && rc.proposedGoal) msg.action = { label: 'Add to my stream', kind: 'goal', goal: rc.proposedGoal, said: text };
-    if (rc.kind === 'compare' && rc.proposedAction) msg.action = { label: 'Review it on the payment card', kind: 'pay', pay: rc.proposedAction };
+    if (rc.kind === 'compare' && rc.proposedAction) msg.action = { label: 'Review this payment', kind: 'pay', pay: rc.proposedAction };
+    if (rc.kind === 'set_income' && rc.proposedIncome) msg.action = rc.proposedIncome.every === 'once' ? { label: 'Add this money', kind: 'once', income: rc.proposedIncome } : { label: 'Use this pay schedule', kind: 'income', income: rc.proposedIncome };
     const f = rc.facts || {};
     H.addReceipt({ title: 'Asked Kip · “' + (text.length > 38 ? text.slice(0, 38) + '…' : text) + '”', verdict: rc.status === 'ready' ? 'Answered' : 'Needs info', tone: 'info', kind: 'Kip answer',
       facts: [['Lowest balance ahead', '—', f.lowest_balance || '—'], ['Safety cushion', '—', f.cushion || '—']].filter(x => x[2] !== '—'), checks: [['Figures filled in by the finance engine', true], ['Answer passed the server’s checks', true]], steps, note: rc.summary });
@@ -722,10 +786,15 @@ function handlers(c) {
       const type = pg && TYPES[pg.type] && TYPES[pg.type].kind === g.kind ? pg.type : g.kind === 'save' ? 'other_save' : 'other_debt';
       const r = H.applyGoal({ kind: g.kind, type, name: g.name, amount: g.amountCents / 100, monthly: g.monthlyCents == null ? null : g.monthlyCents / 100, apr: g.aprBps == null ? null : g.aprBps / 100, deadline: g.deadline }, true);
       H.toast(r.ok ? r.goal + ' added to your stream.' : r.error);
+    } else if (a.kind === 'once') {
+      const inc = a.income; H.addOnce(inc.amountCents / 100, inc.nextDate || TODAY, 'One-time money'); H.toast('Added. Your stream rises on ' + fDay(inc.nextDate || TODAY) + '.');
+    } else if (a.kind === 'income') {
+      const inc = a.income; H.setPay(inc.amountCents / 100, inc.every, inc.nextDate || S().P.nextPay);
+      if (!inc.nextDate && !S().P.nextPay) { H.editIncome(); H.toast('Add your next payday so Koin can place your paychecks.'); } else H.toast('Paydays added to your stream.');
     } else if (a.kind === 'pay') {
       const p = a.pay, list = payDates(), idx = list.findIndex(d => d.date === p.date);
-      set({ drawer: null, pay: Object.assign({}, S().pay, { amount: String(Math.floor(p.amountCents / 100)), dateIdx: idx >= 0 ? idx : S().pay.dateIdx, customDate: idx >= 0 ? null : p.date, phase: 'idle' }) });
-      H.jump(0)(); setTimeout(H.payReview, 60);
+      set({ drawer: null, whatIf: 'pay', pay: Object.assign({}, S().pay, { amount: String(Math.floor(p.amountCents / 100)), dateIdx: idx >= 0 ? idx : S().pay.dateIdx, customDate: idx >= 0 ? null : p.date, phase: 'idle' }) });
+      setTimeout(H.payReview, 60);
     }
   });
   // Calculator-only answers when the agents can't run: keyword-matched and clearly labeled.
@@ -742,7 +811,7 @@ function handlers(c) {
 function canned(q, x) {
   q = q.toLowerCase(); const hb = x.habits || {}; const goals = x.goals || [];
   if (/lowest|low point|shallow/.test(q)) { const gap = (x.lowestBalance || 0) - (x.safetyCushion || 0);
-    return 'Checking bottoms out at ' + money(x.lowestBalance) + ' on ' + x.lowestDate + ', ' + money(Math.abs(gap)) + (gap >= 0 ? ' above' : ' below') + ' your ' + money(x.safetyCushion) + ' cushion. ' + (/not in/.test(x.paydays) ? 'The listed sandbox bills pull it down; pay dates aren’t in sandbox data.' : 'Bills that land before payday (' + x.paydays + ') pull it down, and I count money out before money in on the same day.'); }
+    return 'Checking bottoms out at ' + money(x.lowestBalance) + ' on ' + x.lowestDate + ', ' + money(Math.abs(gap)) + (gap >= 0 ? ' above' : ' below') + ' your ' + money(x.safetyCushion) + ' cushion. ' + (/not set/.test(x.paydays) ? 'The listed bills pull it down, and no pay dates are set yet.' : 'Bills that land before payday (' + x.paydays + ') pull it down, and I count money out before money in on the same day.'); }
   if (/debt.?free|paid off|pay(ing)? off/.test(q)) { const d = goals.filter(g => g.kind === 'payoff');
     if (!d.length) return 'You have no debts listed, so you’re already debt-free in Koin.';
     return d.map(g => g.name + ': ' + (g.date ? g.date + ' (' + g.finishesIn + ')' : 'never at this rate') + ' at ' + money(g.monthly) + ' a month').join('. ') + '. Raise the extra card payment slider to see it move sooner.'; }
@@ -794,7 +863,7 @@ function view(c, React, L) {
   const lockStepsRaw = [['Financial engine', 'CODE', 'Re-ran your outlook and the years ahead with the new habits.'], ['Verifier', 'CODE', lockOk ? 'Stays above your cushion and within budget. Passed.' : 'Breaks your cushion or budget. Blocked.'], ['Coach', 'AI', 'Summarized what changes.']];
   c._lockResult = { facts: lockFacts, stepsRaw: lockStepsRaw, summary: (spendDelta <= 0 ? money(-spendDelta) + ' less' : money(spendDelta) + ' more') + ' spending a month' };
   c._ctx = { today: fDay(TODAY) + ', ' + D(TODAY).getUTCFullYear(), dataSource: SRC.label, checking: P.checking, savings: P.savings, safetyCushion: P.cushion, lowestBalance: Math.round(sim.lowest), lowestDate: fDay(sim.lowestDate), netWorthNow: Math.round(sim.nwNow), netWorthInAYear: Math.round(sim.nw12),
-    emergencyCoverage: fmtDur(sim.cov), unassignedPerMonth: sim.budgetKnown ? Math.round(sim.leftover) : 'unknown (take-home pay not entered)', takeHomePay: P.income, essentialBills: sim.essentials, habits: Object.fromEntries(LEVERS.map(l => [l.id, s.lv[l.id]])), freedCashGoesTo: s.route, paydays: SRC.paydaysText, rent: SRC.kind !== 'demo' ? 'sandbox bills: ' + money(SRC.billsMonthly) + ' in the next 30 days' : sim.hasMortgage ? 'replaced by mortgage' : money(P.rent) + ' on Nov 10',
+    emergencyCoverage: fmtDur(sim.cov), unassignedPerMonth: sim.budgetKnown ? Math.round(sim.leftover) : 'unknown (take-home pay not entered)', takeHomePay: P.income, essentialBills: sim.essentials, habits: Object.fromEntries(LEVERS.map(l => [l.id, s.lv[l.id]])), freedCashGoesTo: s.route, paydays: payText(P) || 'not set', rent: SRC.kind !== 'demo' ? 'sandbox bills: ' + money(SRC.billsMonthly) + ' in the next 30 days' : sim.hasMortgage ? 'replaced by mortgage' : money(P.rent) + ' on Nov 10',
     goals: sim.goals.map(g => { const r = sim.goalMap[g.id]; return { name: g.name, type: g.type, kind: g.kind, amount: g.kind === 'save' ? g.target : g.balance, saved: g.saved || 0, apr: g.apr || null, monthly: Math.round(sim.gs.find(x => x.g.id === g.id).m), finishesIn: r.months === null ? 'never' : fmtDur(r.months), date: r.date ? fMonth(r.date) : null }; }),
     extraPayment300: (() => { const t = compute(s.lv, P, s.goals, s.route, planned.concat([{ amount: 300, date: TODAY }]), false).lowest, altD = payDates()[2], n = compute(s.lv, P, s.goals, s.route, planned.concat([{ amount: 300, date: altD.date }]), false).lowest;
       return { today: (t >= P.cushion ? 'stay at or above ' : 'dip to ') + money(t), altLabel: altD.sub, alt: n >= P.cushion ? 'above your cushion' : 'still under your cushion' }; })() };
@@ -852,7 +921,7 @@ function view(c, React, L) {
   for (let i = pins.length - 1; i >= 0; i--) if (/^[−+]\$0$/.test(pins[i].amt)) pins.splice(i, 1);
   pins.sort((a, b) => a.x - b.x); let lastPin = { x: -1e9, up: 1 };
   pins.forEach(p => { p.up = p.x - lastPin.x < 110 && lastPin.up === 0 ? 1 : 0; lastPin = p; p.ty = p.y - 40 - p.up * 30; p.lineH = 34 + p.up * 30; p.lineTop = p.y - p.lineH; });
-  const lowX = X(10 + sim.li), lowY = Y(sim.lowest);
+  const lowX = X(10 + sim.li), lowY = Y(sim.lowest); c._lowDate = sim.lowestDate;
   // goal flags + cards
   const goalColor = g => TYPES[g.type].c;
   const flags = [];
@@ -865,10 +934,10 @@ function view(c, React, L) {
   items.sort((a, b) => a.want - b.want);
   let cur = hubLeft + hubW + cgap; items.forEach(it => { it.left = Math.max(Math.min(it.want, xEnd - it.w), cur); cur = it.left + it.w + cgap; });
   const cardL = Object.fromEntries(items.map(it => [it.k, Math.round(it.left)]));
-  const contentEnd = Math.max(xEnd + (L.padR || 130), cur + 60);
+  const contentEnd = xEnd + (L.padR || 130);
   const conn = (ax, ay, bx, by) => 'M' + ax + ',' + ay + ' C' + ax + ',' + (ay - 50) + ' ' + bx + ',' + (by + 60) + ' ' + bx + ',' + by;
   const A = Object.assign({}, L.anchors);
-  const cn = { low: conn(A.low || 0, L.cardsTop, lowX, lowY + 8), stand: conn(A.stand || 0, L.cardsTop, x0, Y(sv[10]) + 8) };
+  const cn = { low: '', stand: '' };
   // Kip position (submerged)
   const kx = s.hover !== null && s.hover < N ? xs[s.hover] : Math.min(xs[N - 1] - 30, Math.max(xs[0] + 30, s.scrollX + vw * 0.34));
   const ky = s.hover !== null && s.hover < N ? sp[s.hover][1] : yAt(kx);
@@ -955,7 +1024,7 @@ function view(c, React, L) {
       summary: gres ? (grc ? grc.summary : gres.error) : 'Calculator check: ' + (ok ? 'fits your budget and keeps your cushion.' : 'over budget or under your cushion.') + (isSave ? '' : ' Debt changes aren’t reviewed by the agents yet.'),
       steps: stepRows(viaServer ? [['Financial engine', 'CODE', ''], ['Verifier', 'CODE', ''], ['Coach', 'AI', '']] : stepsRaw, mine && gr.phase === 'reviewing' ? gr.step : undefined), showNote: !!note && !(mine && gr.phase !== 'idle') };
   });
-  const hubGoals = goalCards.map(gc => ({ name: gc.name, date: gc.bigDate, color: gc.color, verb: gc.verb, onClick: H.jump(Math.max(0, gc.left - 200)) }));
+  const hubGoals = goalCards.map(gc => { const fl = flags.find(x => x.id === gc.id); return { name: gc.name, date: gc.bigDate, color: gc.color, verb: gc.verb, onClick: H.jump(fl ? Math.max(0, Math.round(fl.x - 300)) : 0) }; });
   const lr = s.lockRev; const nd = moneyDelta(plan.nw12, sim.nw12);
   const year = { left: cardL.year, nwNow: money(sim.nwNow), nw12: money(sim.nw12), d: nd.text, dTone: T(nd.tone), dShow: nd.show, cov12: fmtDur(sim.cov12), sav12: money(sim.sav12), changed, showHint: lr.phase === 'idle' && !changed, idle: lr.phase === 'idle', reviewing: lr.phase === 'reviewing', done: lr.phase === 'done', ok: lockOk,
     verdict: lockOk ? 'Looks good' : 'Not recommended', vTone: T(lockOk ? 'good' : 'bad'), vBg: T(lockOk ? 'good-soft' : 'bad-soft'), rows: lockFacts.map(r => ({ label: r[0], before: r[1], after: r[2] })), steps: stepRows(lockStepsRaw, lr.phase === 'reviewing' ? lr.step : undefined) };
@@ -964,6 +1033,14 @@ function view(c, React, L) {
   const levers = LEVERS.map(l => { const v = s.lv[l.id], b = s.plan[l.id], d = v - b; const good = l.kind === 'spend' ? d < 0 : d > 0;
     return { id: l.id, label: l.label, value: v, valueLabel: money(v), min: l.min, max: l.max, step: l.step, onChange: H.lever(l.id), pct: ((v - l.min) / (l.max - l.min) * 100).toFixed(2) + '%', basePct: ((b - l.min) / (l.max - l.min) * 100).toFixed(2) + '%',
       dShow: d !== 0, dText: smoney(d), dTone: T(good ? 'good' : 'bad'), dBg: T(good ? 'good-soft' : 'bad-soft'), kind: l.kind, fill: T(d === 0 ? 'ink' : good ? 'good' : 'bad') }; });
+  // The dock's three macro controls: take-home pay, flexible spending and extra debt payment. The full list sits behind Breakdown.
+  const slider = (o, v, b) => { const span = o.max - o.min || 1, d = v - b, good = o.kind === 'income' ? d > 0 : d < 0;
+    return Object.assign({ value: v, pct: ((Math.min(o.max, Math.max(o.min, v)) - o.min) / span * 100).toFixed(2) + '%', basePct: ((Math.min(o.max, Math.max(o.min, b)) - o.min) / span * 100).toFixed(2) + '%',
+      dShow: d !== 0, dText: smoney(d), dTone: T(good ? 'good' : 'bad'), dBg: T(good ? 'good-soft' : 'bad-soft'), fill: T(d === 0 ? 'ink' : good ? 'good' : 'bad') }, o); };
+  const macro = [
+    slider({ id: 'income', kind: 'income', label: 'Take-home pay', valueLabel: P.income > 0 ? money(P.income) : 'Not set', min: 0, max: 10000, step: 50, onChange: H.takeHome }, Math.round(P.income || 0), Math.round(P.income || 0)),
+    slider({ id: 'flex', kind: 'spend', label: 'Flexible spending', valueLabel: money(flexOf(s.lv)), min: 0, max: FLEX_MAX, step: 10, onChange: H.flex }, flexOf(s.lv), flexOf(s.plan)),
+    levers.find(l => l.id === 'extraDebt')];
   const routeOpts = sim.goals.map(g => ({ value: g.id, label: g.name, selected: s.route === g.id })).concat([{ value: 'cash', label: 'Keep in checking', selected: s.route === 'cash' }]);
   const freed = { text: (sim.freed >= 0 ? '+' : '−') + money(Math.abs(sim.freed)) + '/mo', tone: T(sim.freed > 0 ? 'good' : sim.freed < 0 ? 'bad' : 'muted'), year: smoney(sim.freed * 12) + ' a year' };
 
@@ -975,7 +1052,8 @@ function view(c, React, L) {
   for (let i = 0, x = 60; x < xEnd; i++, x += 90 + (i * 41) % 120) pebbles.push({ x, w: 8 + (i * 5) % 10, h: 5 + (i * 3) % 4, top: bottom - 6 - (i * 3) % 4 });
 
   /* drawers */
-  const chat = s.chat.map((m, i) => ({ isKip: m.role === 'kip', isUser: m.role === 'user', text: m.text, hasTrace: !!m.trace, open: s.traceOpen === i, toggle: H.trace(i), src: m.src || (m.live === false ? 'Calculator only' : 'NextMove agents'), steps: stepRows(m.steps || chatTrace(m.live !== false)),
+  const chainRows = list => list.map((x, i) => { const [bg, fg] = STEP_TONE[x[1]]; return { role: x[0], kind: x[1], note: x[2], kBg: T(bg), kFg: T(fg), skipped: !!x[3], op: x[3] ? .55 : 1, more: i < list.length - 1, next: i < list.length - 1 ? list[i + 1][0] : '' }; });
+  const chat = s.chat.map((m, i) => ({ hasChain: !!(m.chain && m.chain.length), chain: m.chain ? chainRows(m.chain) : [], flow: m.chain ? m.chain.map(x => x[0]).join(' → ') : '', isKip: m.role === 'kip', isUser: m.role === 'user', text: m.text, hasTrace: !!m.trace, open: s.traceOpen === i, toggle: H.trace(i), src: m.src || (m.live === false ? 'Calculator only' : 'NextMove agents'), steps: stepRows(m.steps || chatTrace(m.live !== false)),
     hasAction: !!m.action && !m.actionDone, actionLabel: m.action ? m.action.label : '', onAction: H.chatAction(i) }));
   const receipts = s.receipts.map(r => ({ id: r.id, when: r.when, title: r.title, verdict: r.verdict, vTone: T(r.tone), vBg: T(r.tone + '-soft'), kind: r.kind, onClick: H.openRec(r.id), active: s.openRec === r.id }));
   const rr = s.receipts.find(r => r.id === s.openRec);
@@ -997,7 +1075,7 @@ function view(c, React, L) {
     ripple: h('span', { key: s.ripple, style: { position: 'absolute', left: '50%', top: '50%', width: 120, height: 120, marginLeft: -60, marginTop: -60, borderRadius: '50%', border: '2px solid rgba(255,255,255,.8)', pointerEvents: 'none', animation: s.ripple ? 'koinRipple 1.1s ease-out forwards' : 'none', opacity: 0 } }),
     metrics, W: contentEnd, xEnd, x0, x29, chartTop: L.chartTop, chartBottom: bottom, chartH: L.chartH, stageH: L.stageH, lineW: xEnd - L.padL, waterClip: "path('" + areaD + "')",
     scrollRef: H.scrollRef, onScroll: H.onScroll, jumps: jumps.map((j, i) => ({ label: j.label, onClick: H.jump(j.x), active: i === ja, bg: i === ja ? T('ink') : 'transparent', fg: i === ja ? T('bg') : T('muted') })),
-    segs, breaks, ticks, grid, lineD, areaD, planD: changed ? path(pts(pv)) : '', ghostD: prev && (s.payHover || pr.phase !== 'idle') ? path(pts(gv)) : '',
+    segs, breaks, ticks, grid, lineD, areaD, planD: changed ? path(pts(pv)) : '', ghostD: prev && (s.payHover || s.whatIf === 'pay' || pr.phase !== 'idle') ? path(pts(gv)) : '',
     cushionY: Y(P.cushion), zeroY: Y(0), cushionLabel: 'Safety cushion ' + money(P.cushion), todayX: x0, bottom, shallowsH: Math.max(0, bottom - Y(P.cushion)),
     bubbles, weeds, rays, pebbles,
     pins, lowX, lowY, lowLabel: 'Lowest ' + money(sim.lowest), lowTone: low.tone, flags, cn,
@@ -1005,7 +1083,7 @@ function view(c, React, L) {
     stand, low, pay, upcoming: upcoming.slice(0, 8), spend, goalCards, hubGoals, hubLeft, year,
     goalInput: s.goalText, setGoalInput: H.goalText, goalKey: H.goalKey, goalSend: H.goalSend, goalExamples: GOAL_EXAMPLES.map(([label, q]) => ({ text: label, onClick: H.ask(q) })),
     payReview: H.payReview, paySafer: H.paySafer, payApprove: H.payApprove, payCancel: H.payCancel, payAmount: H.payAmount, payEnter: H.payEnter, payLeave: H.payLeave,
-    lockReview: H.lockReview, lockApprove: H.lockApprove, lockCancel: H.lockCancel, lockDock: H.lockDock(Math.max(0, Math.round(cardL.year + yearW - vw + 40))),
+    lockReview: H.lockReview, lockApprove: H.lockApprove, lockCancel: H.lockCancel, lockDock: H.lockDock,
     levers, routeOpts, routeSel: H.routeSel, route: s.route, routeSelect: h('select', { value: s.route, onChange: H.routeSel, 'aria-label': 'Send freed-up cash to', style: { height: 36, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 11, background: 'var(--surface2)', color: 'var(--ink)', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', fontFamily: 'inherit' } }, routeOpts.map(o => h('option', { key: o.value, value: o.value }, o.label))), freed, changed, reset: H.reset,
     drawerKip: s.drawer === 'kip', drawerReceipts: s.drawer === 'receipts', openKip: H.openKip, openReceipts: H.openReceipts, closeDrawer: H.closeDrawer,
     chat, chatRef: H.chatRef, chatInput: s.chatInput, setChatInput: H.chatInput, chatKey: H.chatKey, sendChat: H.send, chatBusy: s.chatBusy, kipLoader: kipLoader(React, s.chatStep, 'happy'), busy: (() => { const x = CHAT_STEPS[Math.min(4, s.chatStep)]; const [bg, fg] = STEP_TONE[x[1]]; return { agent: x[0], kind: x[1], kBg: T(bg), kFg: T(fg), text: x[2] + '…', who: x[1] === 'AI' ? 'AI agent' : 'code check' }; })(), busySteps: stepRows(chatTrace(!!c._serverOk), s.chatStep), suggestions: (() => { const asked = new Set(s.chat.filter(m => m.role === 'user').map(m => m.text));
@@ -1026,6 +1104,22 @@ function view(c, React, L) {
     yearLabel: fMonth(addMonths(TODAY, 12)).toUpperCase() + ' · A YEAR FROM NOW', oweWhat: demo ? 'on your card' : 'on cards and loans',
     howOpen: !!howObj, how: howObj ? { title: howObj.title, intro: howObj.intro, note: howObj.note, steps: howObj.steps.map((x, i) => { const [bg, fg] = STEP_TONE[x[0]]; return { n: i + 1, kind: x[0], title: x[1], text: x[2], kBg: T(bg), kFg: T(fg) }; }) } : null,
     closeHow: H.closeHow, howStand: H.how('stand'), howForecast: H.how('forecast'), howPay: H.how('pay'), howApprove: H.how('approve'), howKip: H.how('kip'), howGoals: H.how('goals'),
+    split: srv.surplus ? { chip: money(srv.surplus.surplusCents / 100) + '/mo extra · suggested split', total: money(srv.surplus.surplusCents / 100), keep: money(srv.surplus.keepCents / 100), rule: srv.surplus.rule,
+      items: srv.surplus.items.map(x => ({ name: x.name, amt: '+' + money(x.cents / 100) + '/mo', reason: x.reason, tone: T(x.target === 'debt' ? 'bad' : 'good') })) } : {},
+    hasSplit: !!srv.surplus, splitOpen: s.whatIf === 'split' && !!srv.surplus, openSplit: H.whatIf('split'), applySplit: H.applySplit, askSplit: H.askSplit,
+    macro, breakdownOpen: s.breakdown, toggleBreakdown: H.toggleBreakdown, breakdownLabel: s.breakdown ? 'Hide breakdown' : 'Breakdown',
+    payChip: (payText(P) ? 'Payday · ' + payText(P) : '+ Add income / payday') + ((P.oneTime || []).length ? ' · +' + (P.oneTime || []).length + ' one-time' : ''), paySet: !!payText(P), editIncome: H.editIncome,
+    incOpen: !!s.incomeEdit, inc: s.incomeEdit ? { amount: s.incomeEdit.amount, next: s.incomeEdit.next, setAmount: H.incomeField('amount'), setNext: H.incomeField('next'),
+      isPay: s.incomeEdit.mode !== 'once', isOnce: s.incomeEdit.mode === 'once', toPay: H.incomeMode('pay'), toOnce: H.incomeMode('once'),
+      payBg: T(s.incomeEdit.mode !== 'once' ? 'ink' : 'surface2'), payFg: T(s.incomeEdit.mode !== 'once' ? 'bg' : 'ink'), onceBg: T(s.incomeEdit.mode === 'once' ? 'ink' : 'surface2'), onceFg: T(s.incomeEdit.mode === 'once' ? 'bg' : 'ink'),
+      onceAmount: s.incomeEdit.onceAmount, onceDate: s.incomeEdit.onceDate, onceLabel: s.incomeEdit.onceLabel, setOnceAmount: H.incomeField('onceAmount'), setOnceDate: H.incomeField('onceDate'), setOnceLabel: H.incomeField('onceLabel'), minDate: TODAY,
+      list: (P.oneTime || []).map(o => ({ label: o.label + ' · ' + money(o.amount) + ' · ' + fDay(o.date), remove: H.removeOnce(o.id) })), hasList: (P.oneTime || []).length > 0,
+      everySelect: h('select', { value: s.incomeEdit.every, onChange: H.incomeField('every'), 'aria-label': 'How often you are paid', style: { height: 36, padding: '0 8px', border: '1.5px solid var(--line)', borderRadius: 10, background: 'var(--surface2)', color: 'var(--ink)', fontSize: 13, fontFamily: 'inherit' } }, Object.keys(PAY_TEXT).map(k => h('option', { key: k, value: k }, PAY_TEXT[k]))) } : {},
+    saveIncome: H.saveIncome, cancelIncome: H.cancelIncome,
+    whatIfPay: s.whatIf === 'pay', openWhatIfPay: H.whatIf('pay'), openWhatIfSave: H.whatIf('save'), closeWhatIf: H.closeWhatIf,
+    lowOpen: s.lowOpen, toggleLow: H.toggleLow, askLow: H.askLow, lowCalloutLeft: Math.max(80, lowX - 150), lowCalloutTop: Math.max(8, lowY - 196),
+    drawerBalances: s.drawer === 'balances', drawerGoals: s.drawer === 'goals', openBalances: H.openSheet('balances'), openGoals: H.openSheet('goals'),
+    shadeH: L.chartH + 8, breakH: L.chartH + 16, breakLabelY: bottom + 26, axisH: L.chartH + 42,
     kipStatus, tipEnter: H.keepTip, tipLeave: H.hideTip, followTip: H.followTip,
     tip: tipG ? { show: true, x: s.tip.x, y: below ? s.tip.b + 10 : s.tip.y - 10, tr: below ? 'translate(-50%,0)' : 'translate(-50%,-100%)', title: tipG[0], def: tipG[1] } : { show: false }, showTip: H.showTip, hideTip: H.hideTip,
     toast: s.toast ? { show: true, text: s.toast } : { show: false },

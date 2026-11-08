@@ -14,7 +14,10 @@ export function validateProfile(p) {
       if(!f||typeof f!=='object'||typeof f.id!=='string'||!/^[a-z0-9_-]{1,40}$/i.test(f.id)||flowIds.has(f.id)||typeof f.label!=='string'||!f.label.trim()||f.label.length>60)throw Error('INVALID_PLAN_FLOWS');
       flowIds.add(f.id);
       if(!Number.isSafeInteger(f.cents)||f.cents===0||Math.abs(f.cents)>1e11)throw Error('INVALID_AMOUNT');
-      if(f.every!=='day'&&!(Number.isInteger(f.every)&&f.every>=1&&f.every<=31))throw Error('INVALID_PLAN_FLOWS');
+      const repeat=f.every&&typeof f.every==='object'&&!Array.isArray(f.every);
+      const once=repeat&&Object.keys(f.every).length===1&&isDate(f.every.date);
+      if(repeat&&!once&&!(Object.keys(f.every).length===2&&isDate(f.every.start)&&[7,14].includes(f.every.days)))throw Error('INVALID_PLAN_FLOWS');
+      if(!repeat&&f.every!=='day'&&!(Number.isInteger(f.every)&&f.every>=1&&f.every<=31))throw Error('INVALID_PLAN_FLOWS');
     }
   }
   // Optional detail Kip's answers read: monthly habit amounts and debts the user entered. Unknown APR or payment stays null.
@@ -39,13 +42,17 @@ export function validateProfile(p) {
   return p;
 }
 
+const isDate=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d))&&new Date(d+'T00:00:00Z').toISOString().slice(0,10)===d;
+// A flow happens every day, on a day of the month, or every 7 or 14 days from a start date (weekly or biweekly pay).
+const daysBetween=(a,b)=>Math.round((Date.parse(b+'T12:00:00Z')-Date.parse(a+'T12:00:00Z'))/86400000);
+const flowOn=(f,date,dom)=>f.every==='day'||f.every===dom||(typeof f.every==='object'&&(f.every.date?f.every.date===date:daysBetween(f.every.start,date)>=0&&daysBetween(f.every.start,date)%f.every.days===0));
 // Expands the profile's plan flows, and goal contributions when a contribution day is set, into dated events inside the 30-day horizon.
 function planFlowEvents(asOf,profile){
   const flows=profile.planFlows||[],day=profile.goalContributionDay??null,events=[];
   if(!flows.length&&day==null)return events;
   for(let i=0;i<30;i++){
     const date=addDays(asOf,i),dom=Number(date.slice(8,10));
-    for(const f of flows)if(f.every==='day'||f.every===dom)events.push({id:`flow-${f.id}-${date}`,date,cents:f.cents,label:f.label,origin:'plan'});
+    for(const f of flows)if(flowOn(f,date,dom))events.push({id:`flow-${f.id}-${date}`,date,cents:f.cents,label:f.label,origin:'plan'});
     if(day===dom)for(const g of profile.goals||[]){
       const cents=Math.min(integer(g.monthlyCents),Math.max(0,integer(g.targetCents)-integer(g.savedCents)));
       if(cents>0)events.push({id:`goal-${g.id}-${date}`,date,cents:-cents,label:'To '+g.name,origin:'plan'});
@@ -94,8 +101,29 @@ export function enrich(raw,profile={goals:[]},planned=[]) {
   const goalsTotal=sumCents(s.goals.map(g=>integer(g.monthlyCents)));
   s.budget={leftoverCents:monthlyLeftover(profile,goalsTotal),goalsTotalCents:goalsTotal};
   s.goalProgress=goalProgress(s.goals[0],s.goals[0]?.monthlyCents??0,s.asOf);
+  s.surplusPlan=surplusPlan(s,profile);
   if(planned.length)s.assumptions=[...s.assumptions,'Planned extra payments are in your NextMove plan only. NextMove does not send them; pay your lender directly.'];
   return s;
+}
+
+// Suggested monthly split of a budget surplus, in integer cents. Only for surpluses of $100 or more a month.
+// Rule: keep a tenth unassigned; emergency savings get up to half of the rest while they cover under three months of
+// essential bills (or when essentials are unknown); then extra goes to the highest-rate debt (unknown rates last),
+// capped at its balance; anything left is split evenly across other savings goals, capped at what each still needs.
+export const SURPLUS_RULE='Keep a tenth unassigned. Emergency savings come first while they cover under three months of essential bills. Then extra goes to the highest-rate debt, then to other savings goals.';
+export function surplusPlan(s,profile={}){
+  const surplus=s.budget?.leftoverCents;
+  if(surplus==null||surplus<10000)return null;
+  const keep=Math.floor(surplus/10);let pool=surplus-keep;const items=[];
+  const remaining=g=>Math.max(0,integer(g.targetCents)-integer(g.savedCents));
+  const em=(s.goals||[]).find(g=>g.kind==='emergency'&&remaining(g)>0);
+  const thin=s.essentialMonthlyCents==null||s.savingsCents<3*s.essentialMonthlyCents;
+  if(em&&thin){const c=Math.min(remaining(em),Math.floor(pool/2));if(c>0){items.push({target:'goal',id:em.id,name:em.name,cents:c,reason:s.essentialMonthlyCents==null?'Essential bills are unknown, so emergency savings come first':'Emergency savings cover under three months of essential bills'});pool-=c;}}
+  const debts=(profile.debts||[]).filter(d=>integer(d.balanceCents)>0).sort((a,b)=>(b.aprBps??-1)-(a.aprBps??-1));
+  for(const d of debts){if(!pool)break;const c=Math.min(pool,d.balanceCents);items.push({target:'debt',id:d.id,name:d.name,cents:c,reason:d.aprBps==null?'Rate unknown; add it to compare debts':'Highest interest rate left ('+(d.aprBps/100)+'%)'});pool-=c;}
+  const others=(s.goals||[]).filter(g=>g!==em&&remaining(g)>0);
+  others.forEach((g,i)=>{if(!pool)return;const share=i===others.length-1?pool:Math.floor(pool/(others.length-i));const c=Math.min(share,remaining(g));if(c>0){items.push({target:'goal',id:g.id,name:g.name,cents:c,reason:'Speeds up this savings goal'});pool-=c;}});
+  return {surplusCents:surplus,keepCents:keep+pool,items,rule:SURPLUS_RULE};
 }
 
 export function compare(s,amountCents,date){
@@ -202,7 +230,12 @@ export function answerFacts(s,profile,topic){
     habits.slice(0,3).forEach((h,i)=>{facts[`habit_${i+1}`]=h.label;facts[`habit_${i+1}_amount`]=m(h.monthlyCents);});
     facts.habit_total=m(habitTotal);
   }
-  if(topic==='budget')Object.assign(facts,{income:m(p.monthlyIncomeCents??null),essentials:m(s.essentialMonthlyCents??null),goals_total:m(s.budget?.goalsTotalCents??null),debt_payments:m(p.debtPaymentsCents??null)});
+  if(topic==='budget'){
+    Object.assign(facts,{income:m(p.monthlyIncomeCents??null),essentials:m(s.essentialMonthlyCents??null),goals_total:m(s.budget?.goalsTotalCents??null),debt_payments:m(p.debtPaymentsCents??null)});
+    // The suggested split of any surplus, so Kip can say where extra money should go.
+    const plan=s.surplusPlan;
+    if(plan){facts.keep_unassigned=m(plan.keepCents);plan.items.slice(0,3).forEach((x,i)=>{facts[`split_${i+1}`]=x.name;facts[`split_${i+1}_amount`]=m(x.cents);});}
+  }
   if(topic==='goals')(s.goals||[]).slice(0,3).forEach((g,i)=>{const r=goalProgress(g,g.monthlyCents,s.asOf),k=`goal_${i+1}`;
     Object.assign(facts,{[k]:g.name,[k+'_monthly']:m(g.monthlyCents),[k+'_saved']:m(r.savedCents),[k+'_target']:m(r.targetCents),[k+'_months']:monthsText(r.months),[k+'_reach']:monthYear(r.reachDate),[k+'_deadline']:monthYear(r.deadline)});});
   if(topic==='debt'){
