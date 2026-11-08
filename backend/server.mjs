@@ -43,6 +43,8 @@ const secureCookies=config.publicOrigin?.startsWith('https:')??false;
 const cookieName=secureCookies?'__Host-nextmove_session':'nextmove_session';
 const cookiePattern=new RegExp(`(?:^|;\\s*)${cookieName.replace(/[-_]/g,'\\$&')}=([a-f0-9]{64})(?:;|$)`);
 const sessionCookie=req=>cookiePattern.exec(req.headers.cookie||'')?.[1];
+// Public files. Anything not listed here is never served from disk.
+const STATIC={'/':'index.html','/index.html':'index.html','/support.js':'support.js','/koin-model.js':'koin-model.js','/classic':'classic.html'};
 const CSP=["default-src 'self'","script-src 'self' https://unpkg.com 'unsafe-eval'","style-src 'self' 'unsafe-inline' https://fonts.googleapis.com","font-src https://fonts.gstatic.com","img-src 'self' data:","connect-src 'self'","frame-ancestors 'none'","base-uri 'none'","form-action 'self'","object-src 'none'",...(secureCookies?['upgrade-insecure-requests']:[])].join('; ');
 function securityHeaders(res){
  res.setHeader('Content-Security-Policy',CSP);res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','DENY');
@@ -94,7 +96,8 @@ const server=http.createServer(async(req,res)=>{try{
  if(req.method==='GET'&&path==='/health')return json(res,200,{ok:true});
 if(requestGuard(req,res))return;
  if(path.startsWith('/api/')){const wait=overLimit('ip:'+clientIp(req),config.ipRequestsPer5Min,300000);if(wait)return limited(res,wait,'RATE_LIMITED');}
- if(req.method==='GET'&&['/','/index.html','/support.js'].includes(path)){const file=path==='/support.js'?'support.js':'index.html';const content=await readFile(new URL('../frontend/'+file,import.meta.url));res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});return res.end(content);}
+ if(req.method==='GET'&&path==='/favicon.ico'){res.writeHead(204,{'Cache-Control':'max-age=86400'});return res.end();}
+ if(req.method==='GET'&&Object.hasOwn(STATIC,path)){const file=STATIC[path];const content=await readFile(new URL('../frontend/'+file,import.meta.url));res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});return res.end(content);}
  if(path==='/api/v1/demo-session'&&req.method==='POST'){const existing=sessionCookie(req);if(validSession(existing)){if(!db.prepare('SELECT 1 FROM profiles WHERE owner=?').get(existing))db.prepare('INSERT INTO profiles VALUES (?,?)').run(existing,JSON.stringify({goals:[EXAMPLE_GOAL]}));return json(res,201,{mode:'synthetic_fixture'});}{const wait=overLimit('session:'+clientIp(req),config.sessionsPerHourPerIp,3600000);if(wait)return limited(res,wait,'RATE_LIMITED');}const id=randomBytes(32).toString('hex');db.prepare('INSERT INTO sessions(id,created) VALUES (?,?)').run(id,Date.now());db.prepare('INSERT INTO goals VALUES (?,30000,1)').run(id);db.prepare('INSERT INTO profiles VALUES (?,?)').run(id,JSON.stringify({goals:[EXAMPLE_GOAL]}));res.setHeader('Set-Cookie',`${cookieName}=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${Math.floor(config.sessionTtlMs/1000)}${secureCookies?'; Secure':''}`);return json(res,201,{mode:'synthetic_fixture'});}
  const owner=sessionCookie(req);if(!validSession(owner))return json(res,401,{error:{code:'SESSION_REQUIRED'}});
  let s=current(owner);

@@ -89,3 +89,29 @@ Behavior:
 Verification: npm test passed 26 of 26, including the new tests/actions.test.mjs (goal progress and budget math, planned payments in forecast and debt, loan interest, placeholder validation, Strategist and Coach guardrails with a test provider, calculator-only summaries, API propose, approve-once, remove and over-budget). Headless Chrome at 1280×900 and 390×844 against a keyless server: blocked payment with a safer suggestion, adding a payment to the plan and removing it, a goal raise and an over-budget goal, loan interest display, recorded walkthrough messaging, and all earlier UI regression scripts. No live NVIDIA or Nessie calls: the AI path was tested only with a test provider in unit tests, and the browser showed calculator-only reviews.
 
 Known limits: the finance model's goal-conflict estimate compares against the lowest balance over the whole month, not the balance after the payment date, so it is shown only for blocked payments. Planned payments outside the 30-day window still reduce displayed debt but not the forecast. Verdict and wording from a live model have not been seen in the browser.
+
+## Koin redesign (November 8, 2026)
+
+The Claude Design handoff "Koin Pond" is now the main page at `/`. It renames the product Koin, with Kip the koi as the Sidekick.
+
+- `frontend/index.html` and `frontend/koin-model.js` are ported from the design bundle unchanged except for the fixes below. All styles, light and dark themes, and all 23 keyframe animations are kept.
+- The previous NextMove interface moved, unchanged, to `frontend/classic.html` and is served at `/classic`.
+- The server now serves only an explicit allowlist of static files: `/`, `/index.html`, `/support.js`, `/koin-model.js` and `/classic`. `/favicon.ico` returns 204 instead of 401.
+- **Honesty fixes to the prototype model:**
+  - The answer trace and receipts mark AI steps as "Skipped" when an answer comes from the local calculator. Previously they claimed the Coordinator, Strategist and Coach ran.
+  - The two seed receipts are labeled "Example."
+  - Kip's $300-payment answer uses computed figures instead of a hardcoded "safe."
+  - Kip's busy loader steps only through the checks that actually run.
+- **UX fix:** the Kip chat scrolls to the newest message and loader.
+- **Quick asks in Ask Kip:** a row of one-tap prompts stays available whenever Kip is idle. It is tailored to the current numbers (for example, "Why is Nov 14 my lowest day?" and "How long until my emergency fund is full?"), and prompts already asked drop off. Questions always get a calculator answer: lowest day, debt-free date, goal timeline, the $300 payment, spending leaks and the cushion. Only statements, such as "Save $2,400 for a vacation by June", add goals.
+- **Known limits (not yet resolved):**
+  - The Koin page runs the design's client-side demo model: dollar floats, habit sliders, a long-run projection, and goals parsed in the browser. This departs from the CLAUDE.md rules that only the finance package computes money, in integer cents.
+  - Koin's figures use the design's demo profile, with $1,520 in checking and habit spending included. They do not match the backend fixture, which has $1,200 and listed bills only. For this reason Koin does not call `/runs`, `/reviews` or `/actions` yet; mixing the two sets of numbers would show contradictory figures.
+  - Approvals, receipts and goals in Koin last only for the current browser session. The server-verified approval flow remains available at `/classic`.
+  - The design is a fixed 1360×900 canvas scaled to fit the window, so it is not a mobile layout.
+  - The browser logs harmless CSP and SVG warnings while it pre-parses template attributes, before the runtime compiles them.
+- **Next integration step:** move the habit and goal model into `backend/finance.mjs` in integer cents, align the fixture with the Koin profile, and point Koin's payment and goal review buttons and Kip at `/reviews`, `/actions` and `/runs`.
+- **Verification:**
+  - `npm test`: 26 of 26 pass. The home-page test now checks Koin, `/classic`, and that unlisted paths are refused.
+  - Headless Chrome at 1440×900 and 1024×700 against a keyless server with the production CSP and `PUBLIC_ORIGIN` set: no runtime errors, 14 animations active at load (the remaining ones are interaction-triggered), and fonts loaded.
+  - Exercised the payment review, safer-date suggestion, habit slider, dark mode, Kip chat with its trace and loader, goal added from chat, goal cards, receipts, and Data & goals.
