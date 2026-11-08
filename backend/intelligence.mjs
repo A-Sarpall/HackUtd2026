@@ -3,10 +3,32 @@ import {simulate,integer,finalizeSnapshot,sumCents,addDays,formatCents,goalProgr
 export function validateProfile(p) {
   if(!p||typeof p!=='object'||Array.isArray(p))throw Error('INVALID_PROFILE');
   if(p.loan){for(const key of ['principalCents','paymentCents','aprBps'])integer(p.loan[key]);if(p.loan.aprBps>10000)throw Error('INVALID_APR');}
-  for(const key of ['cashFloorCents','monthlyIncomeCents','essentialMonthlyCents','debtPaymentsCents']) {
+  for(const key of ['cashFloorCents','monthlyIncomeCents','essentialMonthlyCents','debtPaymentsCents','habitSpendingCents','routedMonthlyCents']) {
     if(p[key]!=null) integer(p[key]);
   }
-  if(!Array.isArray(p.goals)||p.goals.length>5) throw Error('INVALID_GOALS');
+  // Optional user-entered cash flows (Koin's rent, pay, habits, debt payments). Signed cents; every is 'day' or a day of the month.
+  if(p.planFlows!=null){
+    if(!Array.isArray(p.planFlows)||p.planFlows.length>40)throw Error('INVALID_PLAN_FLOWS');
+    const flowIds=new Set();
+    for(const f of p.planFlows){
+      if(!f||typeof f!=='object'||typeof f.id!=='string'||!/^[a-z0-9_-]{1,40}$/i.test(f.id)||flowIds.has(f.id)||typeof f.label!=='string'||!f.label.trim()||f.label.length>60)throw Error('INVALID_PLAN_FLOWS');
+      flowIds.add(f.id);
+      if(!Number.isSafeInteger(f.cents)||f.cents===0||Math.abs(f.cents)>1e11)throw Error('INVALID_AMOUNT');
+      if(f.every!=='day'&&!(Number.isInteger(f.every)&&f.every>=1&&f.every<=31))throw Error('INVALID_PLAN_FLOWS');
+    }
+  }
+  // Optional detail Kip's answers read: monthly habit amounts and debts the user entered. Unknown APR or payment stays null.
+  if(p.habits!=null){
+    if(!Array.isArray(p.habits)||p.habits.length>12)throw Error('INVALID_HABITS');
+    for(const x of p.habits){if(!x||typeof x.id!=='string'||x.id.length>40||typeof x.label!=='string'||!x.label.trim()||x.label.length>40)throw Error('INVALID_HABITS');integer(x.monthlyCents);}
+  }
+  if(p.debts!=null){
+    if(!Array.isArray(p.debts)||p.debts.length>10)throw Error('INVALID_DEBTS');
+    for(const d of p.debts){if(!d||typeof d.id!=='string'||d.id.length>40||typeof d.name!=='string'||!d.name.trim()||d.name.length>60)throw Error('INVALID_DEBTS');integer(d.balanceCents);
+      if(d.aprBps!=null&&(integer(d.aprBps)>10000))throw Error('INVALID_APR');if(d.monthlyCents!=null)integer(d.monthlyCents);}
+  }
+  if(p.goalContributionDay!=null&&!(Number.isInteger(p.goalContributionDay)&&p.goalContributionDay>=1&&p.goalContributionDay<=28))throw Error('INVALID_PLAN_FLOWS');
+  if(!Array.isArray(p.goals)||p.goals.length>10) throw Error('INVALID_GOALS');
   const ids=new Set();
   for(const g of p.goals){
     if(typeof g.id!=='string'||ids.has(g.id)||!['house','emergency','other'].includes(g.kind)||typeof g.name!=='string'||g.name.length>80)throw Error('INVALID_GOALS');
@@ -17,11 +39,26 @@ export function validateProfile(p) {
   return p;
 }
 
+// Expands the profile's plan flows, and goal contributions when a contribution day is set, into dated events inside the 30-day horizon.
+function planFlowEvents(asOf,profile){
+  const flows=profile.planFlows||[],day=profile.goalContributionDay??null,events=[];
+  if(!flows.length&&day==null)return events;
+  for(let i=0;i<30;i++){
+    const date=addDays(asOf,i),dom=Number(date.slice(8,10));
+    for(const f of flows)if(f.every==='day'||f.every===dom)events.push({id:`flow-${f.id}-${date}`,date,cents:f.cents,label:f.label,origin:'plan'});
+    if(day===dom)for(const g of profile.goals||[]){
+      const cents=Math.min(integer(g.monthlyCents),Math.max(0,integer(g.targetCents)-integer(g.savedCents)));
+      if(cents>0)events.push({id:`goal-${g.id}-${date}`,date,cents:-cents,label:'To '+g.name,origin:'plan'});
+    }
+  }
+  return events;
+}
+
 export function enrich(raw,profile={goals:[]},planned=[]) {
   // Approved planned extra payments are app-plan events: they enter the forecast inside the 30-day horizon. No money moves.
   const horizonEnd=addDays(raw.asOf,29);
   const plannedEvents=planned.filter(p=>p.date>=raw.asOf&&p.date<=horizonEnd).map(p=>({id:'planned-'+p.id,date:p.date,cents:-integer(p.amountCents),label:'Planned extra payment',origin:'plan'}));
-  const s=finalizeSnapshot({...raw,events:[...raw.events,...plannedEvents],
+  const s=finalizeSnapshot({...raw,events:[...raw.events,...plannedEvents,...planFlowEvents(raw.asOf,profile)],
     loanTerms:profile.loan||null,
     cashFloorCents:profile.cashFloorCents??raw.cashFloorCents,
     essentialMonthlyCents:profile.essentialMonthlyCents??raw.essentialMonthlyCents,
@@ -49,6 +86,7 @@ export function enrich(raw,profile={goals:[]},planned=[]) {
   for(const g of s.goals){const remaining=Math.max(0,g.targetCents-g.savedCents),months=g.monthlyCents>0?Math.ceil(remaining/g.monthlyCents):remaining===0?0:null;
     if(g.deadline&&(months===null||Date.parse(s.asOf)+months*30*86400000>Date.parse(g.deadline)))s.findings.push({id:'goal-'+g.id,severity:'warning',title:g.name+' is not on track to reach its target by the date you set',evidenceIds:[]});}
   s.assumptions=[...s.assumptions,'Goal timelines assume your monthly amounts stay the same and count a month as 30 days. No money is set aside or moved.'];
+  if(profile.planFlows?.length||profile.goalContributionDay!=null)s.assumptions=[...s.assumptions,'The outlook includes the pay, bills, habits and goal amounts you entered, on the days you planned them. Daily habit spending is spread evenly.'];
   const plannedCents=sumCents(planned.map(p=>integer(p.amountCents)));
   const debtBase=s.loanTerms?integer(s.loanTerms.principalCents):integer(s.liabilitiesCents);
   s.plannedPayments=planned.map(p=>({id:p.id,amountCents:p.amountCents,date:p.date}));
@@ -127,7 +165,7 @@ export function reviewFacts(s,action){
     return {kind:'debt_payment',policy:r.policy,options,warnings,facts,comparison:{minCashCents:r.minCashCents,minCashDate:r.minCashDate,baselineMinCashCents:base.minCashCents,debtLabel:r.debtLabel,debtBeforeCents:r.debtBeforeCents,debtAfterCents:r.debtAfterCents,interestSavingsCents:r.interestSavingsCents,monthsSaved:r.monthsSaved,payoffMonths:r.payoffMonths,payoffMonthsBefore:r.payoffMonthsBefore}};
   }
   if(action?.kind==='goal_contribution'){
-    const g=s.goals[0];if(!g)throw Error('NO_GOAL');integer(action.amountCents);
+    const g=action.goalId==null?s.goals[0]:s.goals.find(x=>x.id===action.goalId);if(!g)throw Error('NO_GOAL');integer(action.amountCents);
     const current=integer(g.monthlyCents),next=action.amountCents,change=next-current;
     const now=goalProgress(g,current,s.asOf),after=goalProgress(g,next,s.asOf);
     const leftoverNow=s.budget.leftoverCents,leftoverNew=leftoverNow==null?null:sumCents([leftoverNow,-change]);
@@ -146,7 +184,31 @@ export function reviewFacts(s,action){
 // Fills {placeholder} tokens with verified facts. Rejects unknown or empty placeholders and any raw numbers outside them.
 export function fillPlaceholders(text,facts){
   if(typeof text!=='string'||!text.trim()||text.length>900)throw Error('INVALID_REVIEW_TEXT');
-  const bare=text.replace(/\{([a-z_]+)\}/g,'');
+  const bare=text.replace(/\{([a-z_0-9]+)\}/g,'');
   if(/[0-9$%{}]/.test(bare))throw Error('UNVERIFIED_NUMBER');
-  return text.replace(/\{([a-z_]+)\}/g,(_,k)=>{if(facts[k]==null)throw Error('UNKNOWN_PLACEHOLDER');return facts[k];});
+  return text.replace(/\{([a-z_0-9]+)\}/g,(_,k)=>{if(facts[k]==null)throw Error('UNKNOWN_PLACEHOLDER');return facts[k];});
+}
+
+// ---- Verified facts for Kip's answers. Display-ready strings keyed by placeholder name; null means unknown. ----
+export const ANSWER_TOPICS=['lowest','spending','goals','debt','budget'];
+const pct=bps=>bps==null?null:(bps%100===0?String(bps/100):(bps/100).toFixed(2).replace(/0$/,''))+'%';
+export function answerFacts(s,profile,topic){
+  const p=profile||{},habits=[...(p.habits||[])].sort((a,b)=>b.monthlyCents-a.monthlyCents);
+  const habitTotal=p.habits?sumCents(p.habits.map(h=>integer(h.monthlyCents))):null;
+  const facts={checking_today:m(s.openingCents),savings:m(s.savingsCents),cushion:m(s.cashFloorCents),lowest_balance:m(s.forecast.minCashCents),lowest_date:shortDate(s.forecast.minCashDate),
+    above_cushion:s.forecast.minCashCents>=s.cashFloorCents?m(s.forecast.minCashCents-s.cashFloorCents):null,below_cushion:s.forecast.minCashCents<s.cashFloorCents?m(s.cashFloorCents-s.forecast.minCashCents):null,
+    owed:m(s.debt?.currentCents??s.liabilitiesCents),net_worth:m(s.metrics.find(x=>x.id==='net-worth')?.value??null),emergency_coverage:coverageText(s),leftover:m(s.budget?.leftoverCents??null)};
+  if(topic==='spending'||topic==='budget'){
+    habits.slice(0,3).forEach((h,i)=>{facts[`habit_${i+1}`]=h.label;facts[`habit_${i+1}_amount`]=m(h.monthlyCents);});
+    facts.habit_total=m(habitTotal);
+  }
+  if(topic==='budget')Object.assign(facts,{income:m(p.monthlyIncomeCents??null),essentials:m(s.essentialMonthlyCents??null),goals_total:m(s.budget?.goalsTotalCents??null),debt_payments:m(p.debtPaymentsCents??null)});
+  if(topic==='goals')(s.goals||[]).slice(0,3).forEach((g,i)=>{const r=goalProgress(g,g.monthlyCents,s.asOf),k=`goal_${i+1}`;
+    Object.assign(facts,{[k]:g.name,[k+'_monthly']:m(g.monthlyCents),[k+'_saved']:m(r.savedCents),[k+'_target']:m(r.targetCents),[k+'_months']:monthsText(r.months),[k+'_reach']:monthYear(r.reachDate),[k+'_deadline']:monthYear(r.deadline)});});
+  if(topic==='debt'){
+    const rows=(p.debts||[]).slice(0,3).map(d=>({d,r:d.aprBps!=null&&d.monthlyCents?payoff({principalCents:d.balanceCents,paymentCents:d.monthlyCents,aprBps:d.aprBps},0):{months:null,interestCents:null}}));
+    rows.forEach(({d,r},i)=>{const k=`debt_${i+1}`;Object.assign(facts,{[k]:d.name,[k+'_balance']:m(d.balanceCents),[k+'_monthly']:m(d.monthlyCents??null),[k+'_apr']:pct(d.aprBps??null),[k+'_months']:monthsText(r.months),[k+'_interest']:m(r.interestCents)});});
+    const all=p.debts||[];facts.debt_free_in=all.length&&all.length<=3&&rows.every(x=>x.r.months!=null)?monthsText(Math.max(...rows.map(x=>x.r.months))):null;
+  }
+  return facts;
 }

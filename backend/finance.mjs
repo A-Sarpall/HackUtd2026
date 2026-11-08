@@ -1,4 +1,6 @@
 export const fixture = () => ({id:'demo-v1',version:1,asOf:'2026-11-07',quality:'complete',mode:'synthetic_fixture',openingCents:120000,savingsCents:60000,liabilitiesCents:200000,cashFloorCents:20000,essentialMonthlyCents:100000,events:[{id:'rent',date:'2026-11-10',cents:-90000},{id:'utility',date:'2026-11-11',cents:-10000},{id:'paycheck',date:'2026-11-14',cents:150000}],assumptions:['Made-up demo data. Only the bills and income listed are included.','Savings are not used to cover checking automatically.']});
+// Koin's made-up demo customer. Rent, utilities, pay and habits are user-entered plan flows sent with the profile, so no bills are listed here.
+export const koinDemo = () => ({id:'koin-demo-v1',version:1,asOf:'2026-11-07',quality:'complete',mode:'synthetic_fixture',openingCents:152000,savingsCents:60000,liabilitiesCents:200000,cashFloorCents:20000,essentialMonthlyCents:null,events:[],assumptions:['Made-up demo customer. Rent, utilities, pay and habits are the amounts entered in Koin.','Savings are not used to cover checking automatically.']});
 export function integer(x){if(!Number.isSafeInteger(x)||x<0||x>1e12)throw Error('INVALID_AMOUNT');return x;}
 function addDays(date, days){const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
 export function simulate(s,changes=[]){
@@ -51,7 +53,8 @@ export function goalProgress(goal,monthlyCents,asOf){
  return {id:goal.id,name:goal.name,targetCents:target,savedCents:saved,remainingCents:remaining,percentSaved:target>0?Math.min(100,Math.floor(saved*100/target)):null,monthlyCents,months,reachDate,deadline:goal.deadline||null,onTrack:goal.deadline?reachDate!=null&&reachDate<=goal.deadline:null};
 }
 // Money left each month after declared essentials, debt payments and goal contributions. Unknown inputs make the result unknown.
-export function monthlyLeftover({monthlyIncomeCents,essentialMonthlyCents,debtPaymentsCents},goalsTotalCents){
+// habitSpendingCents and routedMonthlyCents (freed-up cash the user sends to a goal) are optional: profiles that never set them have none to subtract.
+export function monthlyLeftover({monthlyIncomeCents,essentialMonthlyCents,debtPaymentsCents,habitSpendingCents,routedMonthlyCents},goalsTotalCents){
  if([monthlyIncomeCents,essentialMonthlyCents,debtPaymentsCents].some(v=>v==null))return null;
- return sumCents([integer(monthlyIncomeCents),-integer(essentialMonthlyCents),-integer(debtPaymentsCents),-integer(goalsTotalCents)]);
+ return sumCents([integer(monthlyIncomeCents),-integer(essentialMonthlyCents),-integer(debtPaymentsCents),-integer(habitSpendingCents??0),-integer(routedMonthlyCents??0),-integer(goalsTotalCents)]);
 }

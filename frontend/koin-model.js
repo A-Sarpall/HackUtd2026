@@ -61,6 +61,8 @@ function payDates() {
   if (SRC.kind === 'demo') return PAY_DATES;
   return [[0, 'Today'], [7, 'Next week'], [14, 'In 2 weeks']].map(([n, label]) => { const date = addDays(TODAY, n); return { date, label, sub: fDay(date) }; });
 }
+const isSaveGoal = g => g.kind === 'save';
+const payDateOf = pay => pay.customDate || payDates()[pay.dateIdx].date;
 const nextDom = n => { const d = D(TODAY); if (d.getUTCDate() > n) d.setUTCMonth(d.getUTCMonth() + 1); d.setUTCDate(n); return iso(d); };
 const neverOr = unknown => unknown ? 'Unknown' : 'Never';
 /* Turn a /api/v1/sync snapshot (integer cents) into the Koin source and profile. Unknown stays null. */
@@ -119,6 +121,21 @@ function goalResults(gs, extras) {
   });
 }
 
+/* Recurring cash flows for the next 30 days, in integer cents. The same list is sent to the server as profile.planFlows,
+   so the server's forecast and this chart use identical amounts. Goal contributions are scheduled by the server from the goals. */
+const cents = v => Math.round(v * 100);
+function planFlowsFor(lv, P, gs, demo, rent) {
+  const f = [], add = (id, label, k, c, every, gid) => { if (c !== 0) f.push({ id, label, k, cents: c, every, gid }); };
+  add('habits', 'Everyday spending', 'daily', -cents(DISC.reduce((a, k) => a + lv[k], 0) / 30), 'day');
+  add('side', 'Side income', 'daily', cents(lv.side / 30), 'day');
+  if (demo) { add('rent', 'Rent', 'bill', -cents(rent), 10); add('utilities', 'Utilities', 'bill', -cents(P.utilities), 11); add('pay14', 'Payday', 'pay', cents((P.income || 0) / 2), 14); add('pay28', 'Payday', 'pay', cents((P.income || 0) / 2), 28); }
+  else add('income', 'Take-home pay', 'daily', cents((P.income || 0) / 30), 'day');
+  add('subs', 'Subscriptions', 'bill', -cents(lv.subs), 3);
+  gs.forEach(x => { if (x.g.kind === 'payoff' && x.bal > 0.005 && x.mBase > 0) add('debt-' + x.g.id, x.g.name + ' payment', 'debt', -cents(Math.min(x.mBase, x.bal + x.bal * (x.g.apr || 0) / 1200)), 20, x.g.id); });
+  return f;
+}
+const GOAL_DAY = 15;
+
 function compute(lv, P, goalsIn, route, extras, usePlan, horizonMonths) {
   extras = extras || [];
   const goals = resolveGoals(goalsIn, P);
@@ -130,22 +147,20 @@ function compute(lv, P, goalsIn, route, extras, usePlan, horizonMonths) {
   const hasMortgage = goals.some(g => g.type === 'mortgage');
   const rent = hasMortgage ? 0 : P.rent;
   const card = gs.find(x => x.g.id === 'card');
+  const flows = planFlowsFor(lv, P, gs, demo, rent);
   let bal = P.checking; const days = [];
   for (let i = 0; i < 30; i++) {
-    const date = addDays(TODAY, i), dom = D(date).getUTCDate(); const ev = [];
-    if (demo && dom === 10 && rent > 0) ev.push({ k: 'bill', label: 'Rent', amt: -rent });
-    if (demo && dom === 11) ev.push({ k: 'bill', label: 'Utilities', amt: -P.utilities });
-    if (!demo) SRC.bills.forEach(b => { if (b.date === date) ev.push({ k: 'bill', label: b.label, amt: b.amt }); });
-    if (dom === 3 && lv.subs > 0) ev.push({ k: 'bill', label: 'Subscriptions', amt: -lv.subs });
-    if (dom === 15) gs.forEach(x => { if (x.g.kind === 'save' && x.mBase > 0 && x.saved < x.g.target) { const c = Math.min(x.mBase, x.g.target - x.saved); x.saved += c; ev.push({ k: 'goal', label: 'To ' + x.g.name.toLowerCase(), amt: -c }); } });
-    if (dom === 20) gs.forEach(x => { if (x.g.kind === 'payoff' && x.bal > 0.005 && x.mBase > 0) { const it = x.bal * x.g.apr / 1200; const p = Math.min(x.mBase, x.bal + it); x.bal = x.bal + it - p; ev.push({ k: 'debt', label: x.g.name + ' payment', amt: -p }); } });
-    for (const e of extras) if (e.date === date) { if (card) card.bal = Math.max(0, card.bal - e.amount); ev.push({ k: 'extra', label: e.preview ? 'Extra payment (preview)' : 'Extra payment', amt: -e.amount }); }
-    const outs = ev.filter(e => e.amt < 0).reduce((a, e) => a + e.amt, 0);
-    bal += -disc / 30 + outs;
+    // Money out is counted before money in on the same day, as the server does. Amounts are whole cents.
+    const date = addDays(TODAY, i), dom = D(date).getUTCDate(); const ev = []; let outs = 0, ins = 0;
+    flows.forEach(fl => { if (fl.every !== 'day' && fl.every !== dom) return; const amt = fl.cents / 100; if (amt < 0) outs += amt; else ins += amt;
+      if (fl.k !== 'daily') ev.push({ k: fl.k, label: fl.label, amt });
+      if (fl.gid) { const x = gs.find(y => y.g.id === fl.gid); x.bal = x.bal + x.bal * (x.g.apr || 0) / 1200 + amt; } });
+    if (!demo) SRC.bills.forEach(b => { if (b.date === date) { ev.push({ k: 'bill', label: b.label, amt: b.amt }); outs += b.amt; } });
+    if (dom === GOAL_DAY) gs.forEach(x => { if (x.g.kind === 'save' && x.mBase > 0 && x.saved < x.g.target) { const c = cents(Math.min(x.mBase, x.g.target - x.saved)) / 100; x.saved += c; outs -= c; ev.push({ k: 'goal', label: 'To ' + x.g.name.toLowerCase(), amt: -c }); } });
+    for (const e of extras) if (e.date === date) { if (card) card.bal = Math.max(0, card.bal - e.amount); outs -= e.amount; ev.push({ k: 'extra', label: e.preview ? 'Extra payment (preview)' : 'Extra payment', amt: -e.amount }); }
+    bal += outs;
     const low = bal;
-    // Demo paydays are listed; sandbox data has no pay dates, so entered pay is spread evenly across the month.
-    if (demo && (dom === 14 || dom === 28)) ev.push({ k: 'pay', label: 'Payday', amt: inc / 2 });
-    bal += lv.side / 30 + (demo ? (dom === 14 || dom === 28 ? inc / 2 : 0) : inc / 30);
+    bal += ins;
     days.push({ date, bal, low, ev });
   }
   let lowest = Infinity, li = 0; days.forEach((d, i) => { if (d.low < lowest) { lowest = d.low; li = i; } });
@@ -181,6 +196,34 @@ function compute(lv, P, goalsIn, route, extras, usePlan, horizonMonths) {
     owe: cd.owe || 0, debtMonths: cd.months, interest: cd.interest, debtDate: cd.date, goalMonths: em.months, goalDate: em.date, leftover, essentials, rent, hasMortgage, debtFree, debtFreeMonths,
     nwNow: P.checking + savings - debts, nw12: m12.nw, sav12: m12.sav, cov: essentials > 0 ? P.savings / essentials : null, budgetKnown, debtUnknown: res.some(r => r.unknown), cov12: (P.savings + Math.min(P.goalTarget - P.savings, (emerg ? emerg.m : 0) * 11.5)) / (essentials || Infinity), mood };
 }
+/* The approved plan as a NextMove profile, all in integer cents. The server forecasts, reviews and answers from this. */
+const GOAL_KIND = { emergency: 'emergency', house: 'house' };
+function profileFor(s) {
+  SRC = s.src || DEMO_SRC; TODAY = SRC.today;
+  const P = s.P, lv = s.plan, demo = (s.src || DEMO_SRC).kind === 'demo';
+  const goals = resolveGoals(s.goals, P);
+  const gs = goals.map(g => ({ g, mBase: Math.max(0, goalMonthly(g, lv, true)), bal: g.kind === 'payoff' ? g.balance : 0 }));
+  const rent = goals.some(g => g.type === 'mortgage') ? 0 : P.rent;
+  const B = srcBase(); const freed = DISC.reduce((a, k) => a + B[k] - lv[k], 0) + (B.subs - lv.subs) + lv.side;
+  const routed = s.route !== 'cash' && goals.some(g => g.id === s.route) ? Math.max(0, freed) : 0;
+  const plannedTotal = (s.planned || []).reduce((a, p) => a + p.amount, 0);
+  const habitTotal = DISC.reduce((a, k) => a + lv[k], 0) + lv.subs;
+  return {
+    goals: gs.filter(x => x.g.kind === 'save').map(x => ({ id: x.g.id, kind: GOAL_KIND[x.g.type] || 'other', name: x.g.name, targetCents: cents(x.g.target), savedCents: cents(x.g.saved || 0), monthlyCents: cents(x.mBase), ...(x.g.deadline ? { deadline: x.g.deadline } : {}) })),
+    planFlows: planFlowsFor(lv, P, gs, demo, rent).map(f => ({ id: f.id, label: f.label, cents: f.cents, every: f.every })),
+    goalContributionDay: GOAL_DAY,
+    cashFloorCents: cents(P.cushion),
+    monthlyIncomeCents: P.income == null ? null : cents(P.income + lv.side),
+    essentialMonthlyCents: cents(rent + P.utilities + (demo ? 0 : SRC.billsMonthly)),
+    debtPaymentsCents: cents(gs.filter(x => x.g.kind === 'payoff').reduce((a, x) => a + x.mBase, 0)),
+    habitSpendingCents: cents(habitTotal), routedMonthlyCents: cents(routed),
+    habits: LEVERS.filter(l => l.kind === 'spend').map(l => ({ id: l.id, label: l.label, monthlyCents: cents(lv[l.id]) })),
+    debts: gs.filter(x => x.g.kind === 'payoff').slice(0, 10).map(x => ({ id: x.g.id, name: x.g.name,
+      balanceCents: cents(Math.max(0, x.g.balance - (x.g.id === 'card' ? plannedTotal : 0))), aprBps: x.g.apr == null ? null : Math.round(x.g.apr * 100),
+      monthlyCents: x.g.id === 'card' && P.minPay == null ? null : cents(x.mBase) })),
+  };
+}
+
 function horizonFor(results) {
   let mx = 0; results.forEach(r => r.res.forEach(x => { if (x.months !== null && x.months > mx) mx = x.months; }));
   const yrs = Math.min(30, Math.max(5, Math.ceil((mx + 1) / 12)));
@@ -311,7 +354,6 @@ const HOW = {
 const CHAT_STEPS = [['Coordinator', 'AI', 'Read your message'], ['Financial engine', 'CODE', 'Pulled your verified numbers'], ['Verifier', 'CODE', 'Checked your safety cushion'], ['Strategist', 'AI', 'Picked a verified option'], ['Coach', 'AI', 'Wrote this answer']];
 const AI_OFF = 'Skipped: AI unavailable, calculator-only answer';
 const chatTrace = live => CHAT_STEPS.map(x => x[1] === 'AI' && !live ? [x[0], x[1], x[0] === 'Coordinator' ? 'Skipped: message matched by keyword rules' : AI_OFF, true] : x);
-const aiAvailable = () => !!(window.claude && window.claude.complete);
 const GOAL_EXAMPLES = [['Vacation · $2,400 by June', 'Save $2,400 for a vacation by June'], ['Student loans · $18k at 5%', 'Pay off $18,000 in student loans at 5%'], ['Mortgage · $160k', 'Pay off my $160k mortgage']];
 
 const SEED_RECEIPTS = [
@@ -404,7 +446,28 @@ function stepRows(list, active) {
 /* ---------- handlers ---------- */
 const DEF = { theme: 'light', lv: BASE, plan: BASE, route: 'cash', P: PROFILE, goals: GOALS0, planned: [], pay: { amount: '300', dateIdx: 0, phase: 'idle', step: 0 }, payHover: false,
   goalRev: { id: null, phase: 'idle', step: 0 }, lockRev: { phase: 'idle', step: 0 }, hover: null, scrollX: 0, lastLever: null, ripple: 0, drawer: null, setup: false, how: null, tip: null, goalText: '',
-  receipts: SEED_RECEIPTS, openRec: null, chat: [{ role: 'kip', text: 'Hey! I’m Kip, your money sidekick. Ask me anything, or tell me a goal like “pay off my student loans” and I’ll add it to your stream.' }], chatInput: '', chatBusy: false, chatStep: 0, traceOpen: -1, toast: null, src: DEMO_SRC, srcState: { status: 'idle', customers: [], message: '' } };
+  receipts: SEED_RECEIPTS, openRec: null, chat: [{ role: 'kip', text: 'Hey! I’m Kip, your money sidekick. Ask me anything, or tell me a goal like “pay off my student loans” and I’ll add it to your stream.' }], chatInput: '', chatBusy: false, chatStep: 0, traceOpen: -1, toast: null, src: DEMO_SRC, srcState: { status: 'idle', customers: [], message: '' },
+  srv: { status: 'connecting', pending: false, minCash: null, message: '' } };
+
+/* ---------- NextMove server receipts → Koin steps ---------- */
+const AI_ROLES = ['Coordinator', 'Strategist', 'Coach'];
+const MODEL_TEXT = { Coordinator: 'Read your message and chose what to check', Strategist: 'Picked a verified option', Coach: 'Wrote the answer with verified figures' };
+const TOOL_TEXT = { compare_scenarios: 'Compared the payment options', cash_floor_check: 'Checked your safety cushion', compare_payment: 'Re-ran your outlook with the payment', project_goal: 'Projected the goal at the new amount',
+  monthly_budget_check: 'Checked your monthly budget', snapshot_facts: 'Pulled your verified numbers', project_new_goal: 'Projected the new goal' };
+function traceSteps(rc) {
+  const out = (rc.trace || []).map(t => { const text = t.tool === 'model' ? MODEL_TEXT[t.role] || 'Model step' : TOOL_TEXT[t.tool] || (t.tool.indexOf('answer_') === 0 ? 'Pulled your ' + t.tool.slice(7) + ' figures' : t.tool);
+    return [t.role, AI_ROLES.includes(t.role) ? 'AI' : 'CODE', text + (t.status === 'rejected_requested' ? ': the amount you asked for was blocked' : '')]; });
+  if (rc.provenance && rc.provenance.mode === 'deterministic') out.push(['Coach', 'AI', 'Skipped: AI isn’t configured on the server, so this uses fixed calculator wording', true]);
+  return out;
+}
+const srcLabel = rc => rc.provenance && rc.provenance.mode === 'live' ? 'NextMove agents · ' + String(rc.provenance.model || 'Nemotron').split('/').pop() + ' · server-verified figures' : 'Calculator only · AI not configured on the server';
+const VERDICT = { good_idea: ['Looks safe', 'good'], caution: ['OK, with caution', 'warn'], not_recommended: ['Not recommended', 'bad'] };
+function reviewError(r) {
+  const code = r && r.data && r.data.error && r.data.error.code;
+  if (r && r.status === 429) return 'Kip has done a lot of checks this hour, so the server is pausing. Try again in a few minutes.';
+  return ({ PAYMENT_EXCEEDS_DEBT: 'That’s more than you owe. Try a smaller amount.', DATE_OUTSIDE_HORIZON: 'Koin can check payments within the next 30 days.', NO_GOAL: 'This goal isn’t saved on the server yet. Try again in a moment.' })[code]
+    || (r && r.data && r.data.error === 'MODEL_OR_VALIDATION_FAILURE' ? 'The AI answer didn’t pass Koin’s checks, so nothing was shown. Try again.' : 'Koin couldn’t verify this right now. Try again.');
+}
 
 function handlers(c) {
   if (c._h) return c._h;
@@ -414,12 +477,12 @@ function handlers(c) {
   const memo = (k, f) => cache[k] || (cache[k] = f);
   const idle = { goalRev: { id: null, phase: 'idle', step: 0 }, lockRev: { phase: 'idle', step: 0 } };
   H.lever = id => memo('lv' + id, e => { const v = +e.target.value; c.setState(st => { const s = Object.assign({}, DEF, st); return Object.assign({ lv: Object.assign({}, s.lv, { [id]: v }), lastLever: id, ripple: s.ripple + 1 }, idle); }); });
-  H.routeSel = e => { const r = e.target.value; c.setState(st => ({ route: r, lastLever: 'route', ripple: (st.ripple || 0) + 1, lockRev: { phase: 'idle', step: 0 } })); };
+  H.routeSel = e => { const r = e.target.value; c.setState(st => ({ route: r, lastLever: 'route', ripple: (st.ripple || 0) + 1, lockRev: { phase: 'idle', step: 0 } })); H.pushProfile(); };
   H.reset = () => set(Object.assign({ lv: S().plan, goals: S().goals.map(g => g.fixed ? g : Object.assign({}, g, { monthly: g.planMonthly })), lastLever: null }, idle));
   H.bump = (id, d) => memo('bp' + id + d, () => c.setState(st => { const s = Object.assign({}, DEF, st);
     if (id === 'emergency' || id === 'card') { const lid = id === 'emergency' ? 'goal' : 'extraDebt'; const l = LEVERS.find(x => x.id === lid); const v = Math.min(l.max, Math.max(l.min, s.lv[lid] + d)); return Object.assign({ lv: Object.assign({}, s.lv, { [lid]: v }), lastLever: lid, ripple: s.ripple + 1 }, idle); }
     return Object.assign({ goals: s.goals.map(g => g.id === id ? Object.assign({}, g, { monthly: Math.max(0, g.monthly + d) }) : g), lastLever: null, ripple: s.ripple + 1 }, idle); }));
-  H.removeGoal = id => memo('rg' + id, () => { const s = S(); const g = s.goals.find(x => x.id === id); if (!g || g.fixed) return; set({ goals: s.goals.filter(x => x.id !== id), route: s.route === id ? 'cash' : s.route, ripple: s.ripple + 1, lastLever: null }); H.toast(g.name + ' removed from your stream.'); });
+  H.removeGoal = id => memo('rg' + id, () => { const s = S(); const g = s.goals.find(x => x.id === id); if (!g || g.fixed) return; set({ goals: s.goals.filter(x => x.id !== id), route: s.route === id ? 'cash' : s.route, ripple: s.ripple + 1, lastLever: null }); H.pushProfile(); H.toast(g.name + ' removed from your stream.'); });
   H.applyGoal = (inp, live) => {
     const s = S(); const g = normalizeGoal(inp || {});
     if (!g) return { ok: false, error: 'Need a dollar amount for the goal (target to save, or balance owed).' };
@@ -430,7 +493,7 @@ function handlers(c) {
     const ex = s.planned.map(p => ({ amount: p.amount, date: p.date }));
     const before = compute(s.lv, s.P, s.goals, s.route, ex, false), after = compute(s.lv, P, goals, s.route, ex, false);
     const r = after.goalMap[gid]; const gg = after.goals.find(x => x.id === gid);
-    set(Object.assign({ goals, P, lastLever: 'goal:' + gid, ripple: s.ripple + 1 }, idle));
+    set(Object.assign({ goals, P, lastLever: 'goal:' + gid, ripple: s.ripple + 1 }, idle)); H.pushProfile();
     const ok = (!after.budgetKnown || after.leftover >= 0) && after.lowest >= P.cushion;
     H.addReceipt({ title: 'Goal added · ' + gg.name + ' ' + money(gg.kind === 'save' ? gg.target : gg.balance), verdict: ok ? 'Added' : 'Added · over budget', tone: ok ? 'good' : 'warn', kind: 'Goal from Kip',
       facts: [['Monthly toward it', '—', money(goalMonthly(gg, s.lv))], [gg.kind === 'save' ? 'Reached in' : 'Paid off in', '—', r.months === null ? 'Never' : fmtDur(r.months)], ['Unassigned each month', money(before.leftover), money(after.leftover)], ['Lowest balance ahead', money(before.lowest), money(after.lowest)]],
@@ -454,28 +517,75 @@ function handlers(c) {
   H.addReceipt = r => c.setState(st => ({ receipts: [Object.assign({ id: 'r' + Date.now() + Math.floor(Math.random() * 99), when: nowStamp() }, r)].concat(st.receipts || SEED_RECEIPTS) }));
   const runSteps = (key, n, extra) => { let i = 0; c.setState({ [key]: Object.assign({}, S()[key], extra || {}, { phase: 'reviewing', step: 0 }) }); clearInterval(c['_iv' + key]);
     c['_iv' + key] = setInterval(() => { i++; const cur = Object.assign({}, DEF, c.state)[key]; if (i >= n) { clearInterval(c['_iv' + key]); set({ [key]: Object.assign({}, cur, { phase: 'done', step: n }) }); } else set({ [key]: Object.assign({}, cur, { step: i }) }); }, 480); };
+  // Server reviews: steps animate while the agents run, then the result is stored on the card's state.
+  const animate = (key, n, extra) => { let i = 0; set({ [key]: Object.assign({}, S()[key], extra || {}, { phase: 'reviewing', step: 0, res: null }) }); clearInterval(c['_iv' + key]);
+    c['_iv' + key] = setInterval(() => { const cur = S()[key]; if (cur.phase !== 'reviewing') return clearInterval(c['_iv' + key]); i = Math.min(n - 1, i + 1); set({ [key]: Object.assign({}, cur, { step: i }) }); }, 600); };
+  const finish = (key, res) => { clearInterval(c['_iv' + key]); set({ [key]: Object.assign({}, S()[key], { phase: 'done', step: 99, res }) }); };
   H.payAmount = e => { const v = e.target.value.replace(/[^0-9]/g, '').slice(0, 5); set({ pay: Object.assign({}, S().pay, { amount: v, phase: 'idle' }) }); };
-  H.payDate = i => memo('pd' + i, () => set({ pay: Object.assign({}, S().pay, { dateIdx: i, phase: 'idle' }) }));
+  H.payDate = i => memo('pd' + i, () => set({ pay: Object.assign({}, S().pay, { dateIdx: i, customDate: null, phase: 'idle' }) }));
   H.payEnter = () => set({ payHover: true }); H.payLeave = () => set({ payHover: false });
-  H.payReview = () => { if (!(+S().pay.amount > 0)) return; runSteps('pay', 4); };
-  H.paySafer = () => { const r = c._payResult; if (!r || !r.safer) return; set({ pay: Object.assign({}, S().pay, r.safer.patch, { phase: 'idle' }) }); setTimeout(() => runSteps('pay', 4), 30); };
-  H.payApprove = () => { const s = S(), r = c._payResult; if (!r || !r.ok) return; const item = { id: 'p' + Date.now(), amount: +s.pay.amount, date: payDates()[s.pay.dateIdx].date };
+  H.payReview = async () => {
+    const s = S(), amt = +s.pay.amount; if (!(amt > 0)) return;
+    if (!c._serverOk) { set({ pay: Object.assign({}, s.pay, { res: null }) }); runSteps('pay', 4); return; }
+    if (c._changed) { H.toast('Lock in or reset your habit changes first. Kip checks payments against your saved plan.'); return; }
+    const date = payDateOf(s.pay); animate('pay', 4);
+    try { const r = await runServer('/reviews', { action: { kind: 'debt_payment', amountCents: cents(amt), date } });
+      finish('pay', r.ok && r.data.status === 'completed' ? { receipt: r.data.receipt, amount: amt, date } : { error: reviewError(r) }); }
+    catch (e) { finish('pay', { error: 'The NextMove server couldn’t be reached.' }); }
+  };
+  H.paySafer = () => { const s = S(), r = s.pay.res, rc = r && r.receipt;
+    if (rc) { const o = rc.options && rc.options[rc.selected]; if (!o || rc.selected === 'requested') return;
+      set({ pay: Object.assign({}, s.pay, { amount: String(Math.floor(o.amountCents / 100)), customDate: o.date || payDateOf(s.pay), phase: 'idle' }) }); setTimeout(H.payReview, 30); return; }
+    const l = c._payResult; if (!l || !l.safer) return; set({ pay: Object.assign({}, s.pay, l.safer.patch, { phase: 'idle' }) }); setTimeout(() => runSteps('pay', 4), 30); };
+  // Approval is the user's click; the server re-checks ownership, freshness and the cushion before saving it once.
+  const approve = async (body) => {
+    const p = await api('POST', '/actions', body); if (!p.ok) throw p;
+    const a = await api('POST', '/actions/' + p.data.id + '/approve', { proposalHash: p.data.proposalHash, expectedGoalVersion: p.data.expectedGoalVersion, snapshotVersion: p.data.snapshotVersion }); if (!a.ok) throw a;
+    const snap = await api('GET', '/snapshot'); if (snap.ok) adopt(snap.data);
+  };
+  H.payApprove = async () => {
+    const s = S(), r = s.pay.res;
+    if (r && r.receipt) {
+      try { await approve({ kind: 'debt_payment', amountCents: cents(r.amount), date: r.date, receiptId: r.receipt.id }); }
+      catch (e) { H.toast(e && e.status === 422 ? 'The server blocked it: it would dip under your cushion.' : 'Your numbers changed. Review the payment again.'); set({ pay: Object.assign({}, s.pay, { phase: 'idle' }) }); return; }
+      set({ pay: { amount: '', dateIdx: 2, phase: 'idle', step: 0 } }); H.pushProfile();
+      H.addReceipt({ title: 'Extra payment · ' + money(r.amount) + ' on ' + fDay(r.date), verdict: 'Approved', tone: 'good', kind: 'Payment review', facts: c._payResult ? c._payResult.facts : [], checks: [['Agent review: ' + (VERDICT[r.receipt.verdict] || ['Reviewed'])[0], true], ['Server re-checked your cushion', true], ['Approved once by you', true]], steps: traceSteps(r.receipt), note: r.receipt.summary + ' Added to your plan. No money moved.' });
+      H.toast('Added to your plan. Koin never moves money, you make the payment.'); return;
+    }
+    const l = c._payResult; if (!l || !l.ok) return; const item = { id: 'p' + Date.now(), amount: +s.pay.amount, date: payDateOf(s.pay) };
     set({ planned: s.planned.concat([item]), pay: { amount: '', dateIdx: 2, phase: 'idle', step: 0 } });
-    H.addReceipt({ title: 'Extra payment · ' + money(item.amount) + ' on ' + fDay(item.date), verdict: 'Approved', tone: 'good', kind: 'Payment review', facts: r.facts, checks: [['Stays above safety cushion', true], ['Uses verified figures only', true], ['Approved once by you', true]], steps: r.stepsRaw, note: 'Added to your Koin plan. No money moved.' });
+    H.addReceipt({ title: 'Extra payment · ' + money(item.amount) + ' on ' + fDay(item.date), verdict: 'Approved', tone: 'good', kind: 'Payment review', facts: l.facts, checks: [['Stays above safety cushion', true], ['Approved once by you', true]], steps: l.stepsRaw, note: 'Calculator check only (server unavailable). Added to your Koin plan. No money moved.' });
     H.toast('Added to your plan. Koin never moves money, you make the payment.'); };
   H.payCancel = () => set({ pay: Object.assign({}, S().pay, { phase: 'idle' }) });
-  H.removePlanned = id => memo('rm' + id, () => { set({ planned: S().planned.filter(p => p.id !== id) }); H.toast('Removed from your plan.'); });
-  H.goalReview = id => memo('gr' + id, () => runSteps('goalRev', 3, { id }));
-  H.goalApprove = id => memo('ga' + id, () => { const s = S(), g = c._goalResult && c._goalResult[id]; const patch = { goalRev: { id: null, phase: 'idle', step: 0 } };
-    if (id === 'emergency') patch.plan = Object.assign({}, s.plan, { goal: s.lv.goal }); else if (id === 'card') patch.plan = Object.assign({}, s.plan, { extraDebt: s.lv.extraDebt });
-    else patch.goals = s.goals.map(x => x.id === id ? Object.assign({}, x, { planMonthly: x.monthly }) : x);
-    set(patch);
-    if (g) H.addReceipt({ title: 'Goal change · ' + g.name + ' ' + g.from + ' → ' + g.to + ' a month', verdict: 'Approved', tone: 'good', kind: 'Goal review', facts: g.facts, checks: [['Fits your monthly budget', true], ['Approved once by you', true]], steps: g.stepsRaw, note: 'Changed your monthly goal setting. No money moved.' });
+  H.removePlanned = id => memo('rm' + id, async () => {
+    if (c._serverOk && !/^p\d/.test(id)) { const r = await api('DELETE', '/planned-payments/' + id); if (r.ok) { adopt(r.data); H.pushProfile(); H.toast('Removed from your plan.'); } else H.toast('Couldn’t remove it. Try again.'); return; }
+    set({ planned: S().planned.filter(p => p.id !== id) }); H.toast('Removed from your plan.'); });
+  // Savings goals are reviewed by the server agents. Debt cards (no server review type) keep the calculator check, labeled as such.
+  H.goalReview = id => memo('gr' + id, async () => {
+    const s = S(), g = resolveGoals(s.goals, s.P).find(x => x.id === id); if (!g) return;
+    if (g.kind !== 'save' || !c._serverOk) { set({ goalRev: { id, phase: 'idle', step: 0, res: null } }); runSteps('goalRev', 3, { id }); return; }
+    const amount = goalMonthly(g, s.lv, false); animate('goalRev', 3, { id });
+    try { const r = await runServer('/reviews', { action: { kind: 'goal_contribution', goalId: id, amountCents: cents(amount) } });
+      finish('goalRev', r.ok && r.data.status === 'completed' ? { receipt: r.data.receipt, amount } : { error: reviewError(r) }); }
+    catch (e) { finish('goalRev', { error: 'The NextMove server couldn’t be reached.' }); }
+  });
+  H.goalApprove = id => memo('ga' + id, async () => { const s = S(), g = c._goalResult && c._goalResult[id], res = s.goalRev.res;
+    if (res && res.receipt) {
+      try { await approve({ kind: 'goal_contribution', goalId: id, amountCents: cents(res.amount), receiptId: res.receipt.id }); }
+      catch (e) { H.toast(e && e.status === 422 ? 'The server blocked it: it’s over your monthly budget.' : 'Your numbers changed. Review the change again.'); set({ goalRev: { id: null, phase: 'idle', step: 0 } }); return; }
+    }
+    const cur = S(); const patch = { goalRev: { id: null, phase: 'idle', step: 0 } };
+    if (id === 'emergency') patch.plan = Object.assign({}, cur.plan, { goal: cur.lv.goal }); else if (id === 'card') patch.plan = Object.assign({}, cur.plan, { extraDebt: cur.lv.extraDebt });
+    else patch.goals = cur.goals.map(x => x.id === id ? Object.assign({}, x, { planMonthly: x.monthly }) : x);
+    set(patch); H.pushProfile();
+    if (g) H.addReceipt({ title: 'Goal change · ' + g.name + ' ' + g.from + ' → ' + g.to + ' a month', verdict: 'Approved', tone: 'good', kind: 'Goal review', facts: g.facts,
+      checks: res && res.receipt ? [['Agent review: ' + (VERDICT[res.receipt.verdict] || ['Reviewed'])[0], true], ['Server re-checked your budget', true], ['Approved once by you', true]] : [['Fits your monthly budget', true], ['Approved once by you', true]],
+      steps: res && res.receipt ? traceSteps(res.receipt) : g.stepsRaw, note: (res && res.receipt ? res.receipt.summary + ' ' : 'Calculator check only. ') + 'Changed your monthly goal setting. No money moved.' });
     H.toast('Goal plan updated.'); });
   H.goalCancel = () => set({ goalRev: { id: null, phase: 'idle', step: 0 } });
   H.lockReview = () => runSteps('lockRev', 3);
-  H.lockApprove = () => { const s = S(), g = c._lockResult; set({ plan: s.lv, goals: s.goals.map(x => x.fixed ? x : Object.assign({}, x, { planMonthly: x.monthly })), lockRev: { phase: 'idle', step: 0 }, lastLever: null });
-    H.addReceipt({ title: 'Habit plan · ' + (g ? g.summary : 'updated'), verdict: 'Approved', tone: 'good', kind: 'Habit review', facts: g ? g.facts : [], checks: [['Stays above safety cushion', true], ['Fits your monthly budget', true], ['Approved once by you', true]], steps: g ? g.stepsRaw : [], note: 'Your new habits are now the plan everything compares against.' });
+  H.lockApprove = () => { const s = S(), g = c._lockResult; set({ plan: s.lv, goals: s.goals.map(x => x.fixed ? x : Object.assign({}, x, { planMonthly: x.monthly })), lockRev: { phase: 'idle', step: 0 }, lastLever: null }); H.pushProfile();
+    H.addReceipt({ title: 'Habit plan · ' + (g ? g.summary : 'updated'), verdict: 'Approved', tone: 'good', kind: 'Habit review', facts: g ? g.facts : [], checks: [['Stays above safety cushion', true], ['Fits your monthly budget', true], ['Approved once by you', true]], steps: g ? g.stepsRaw : [], note: 'Calculator check. Your new habits are now the plan everything compares against.' });
     H.toast('Locked in! These habits are your new plan.'); };
   H.lockCancel = () => set({ lockRev: { phase: 'idle', step: 0 } });
   H.lockDock = x => memo('ld' + x, () => { H.lockReview(); H.jump(x)(); });
@@ -493,39 +603,76 @@ function handlers(c) {
   const SRC_ERR = { NESSIE_KEY_MISSING: 'Sandbox customers aren’t connected on this server.', RATE_LIMITED: 'Too many requests. Wait a minute and try again.' };
   const errText = d => { const e = (d && d.error) || {}; return SRC_ERR[e.code] || e.message || 'Sandbox data isn’t available right now. Try again in a moment.'; };
   const setSrcState = p => c.setState(st => ({ srcState: Object.assign({}, (st.srcState || DEF.srcState), p) }));
+  /* ---- NextMove server: the saved plan, its snapshot version, and the agent workflows ---- */
+  const setSrv = p => c.setState(st => ({ srv: Object.assign({}, st.srv || DEF.srv, p) }));
+  // Record the server snapshot Koin is in step with; planned payments come from the server.
+  const adopt = snap => { c._snap = { id: snap.id, version: snap.version }; set({ planned: (snap.plannedPayments || []).map(p => ({ id: p.id, amount: p.amountCents / 100, date: p.date })) });
+    setSrv({ status: 'ready', minCash: snap.forecast ? snap.forecast.minCashCents : null, message: '' }); };
+  // Saves the approved plan as the server profile. Calls coalesce; flush() waits for the latest save.
+  H.pushProfile = delay => { c._dirty = true; setSrv({ pending: true }); clearTimeout(c._pushT); c._pushT = setTimeout(H.flush, delay || 0); };
+  H.flush = () => { clearTimeout(c._pushT); if (c._flushing) return c._flushing.then(() => c._dirty ? H.flush() : null);
+    if (!c._dirty || !c._snap) { setSrv({ pending: false }); return Promise.resolve(); }
+    c._flushing = (async () => { while (c._dirty) { c._dirty = false;
+      try { const r = await api('PUT', '/profile', profileFor(S())); if (r.ok) adopt(r.data); else { setSrv({ status: 'error', message: 'The server rejected the plan (' + ((r.data.error || {}).code || r.status) + ').' }); break; } }
+      catch (e) { setSrv({ status: 'error', message: 'The NextMove server couldn’t be reached.' }); break; } }
+      setSrv({ pending: false }); c._flushing = null; })();
+    return c._flushing; };
+  // Every agent call carries the snapshot it was made against; a stale snapshot is re-saved once and retried.
+  const runServer = async (path, body) => {
+    await H.flush(); await new Promise(r => setTimeout(r, 0)); if (!c._serverOk) throw Error('NOT_IN_STEP');
+    const send = () => api('POST', path, Object.assign({ snapshotId: c._snap.id, snapshotVersion: c._snap.version }, body));
+    let r = await send(); if (r.status === 409) { c._dirty = true; await H.flush(); r = await send(); }
+    return r;
+  };
+  H.useDemo = async () => {
+    try { const r = await api('POST', '/sync', { source: 'demo' }); if (!r.ok) throw r;
+      set(resetFor(DEMO_SRC, PROFILE, BASE)); adopt(r.data.snapshot); H.pushProfile(); setSrcState({ message: '' }); }
+    catch (r) { set(resetFor(DEMO_SRC, PROFILE, BASE)); setSrv({ status: 'offline', message: 'The NextMove server isn’t available, so answers are calculator-only.' }); }
+  };
+  // Start on the first Nessie sandbox customer when the server has one; otherwise the made-up demo customer.
+  H.init = async () => {
+    try { if (!c._session) { const r = await api('POST', '/demo-session', {}); if (!r.ok) throw r; c._session = true; } }
+    catch (e) { setSrv({ status: 'offline', message: 'The NextMove server isn’t available, so answers are calculator-only.' }); return; }
+    // React may not have applied state yet, so use return values rather than reading state back.
+    const list = await H.loadCustomers();
+    if (!(list.length && await H.chooseSource({ target: { value: list[0].id } }, list))) await H.useDemo();
+  };
   H.loadCustomers = async () => {
     setSrcState({ status: 'loading', message: '' });
     try {
       if (!c._session) { const r = await api('POST', '/demo-session', {}); if (!r.ok) throw r; c._session = true; }
       const r = await api('GET', '/customers'); if (!r.ok) throw r;
       const list = r.data.customers || [];
-      setSrcState({ status: 'ready', customers: list, message: list.length ? '' : 'The sandbox has no customers yet.' });
-    } catch (r) { setSrcState({ status: 'error', customers: [], message: errText(r && r.data) }); }
+      setSrcState({ status: 'ready', customers: list, message: list.length ? '' : 'The sandbox has no customers yet.' }); return list;
+    } catch (r) { setSrcState({ status: 'error', customers: [], message: errText(r && r.data) }); return []; }
   };
   const resetFor = (src, P, base) => ({ src, P, lv: base, plan: base, goals: GOALS0, planned: [], route: 'cash', lastLever: null, hover: null, ripple: (S().ripple || 0) + 1,
     pay: { amount: '300', dateIdx: 0, phase: 'idle', step: 0 }, goalRev: { id: null, phase: 'idle', step: 0 }, lockRev: { phase: 'idle', step: 0 } });
-  H.chooseSource = async e => {
+  H.chooseSource = async (e, known) => {
     const id = e.target.value;
-    if (id === 'demo') { set(resetFor(DEMO_SRC, PROFILE, BASE)); setSrcState({ message: '' }); H.toast('Switched to the made-up demo customer.'); return; }
-    const customer = (S().srcState.customers || []).find(x => x.id === id); if (!customer) return;
+    if (id === 'demo') { await H.useDemo(); H.toast('Switched to the made-up demo customer.'); return true; }
+    const customer = (known || S().srcState.customers || []).find(x => x.id === id); if (!customer) return false;
     setSrcState({ status: 'syncing', message: 'Loading ' + customer.label + '…' });
     try {
       const r = await api('POST', '/sync', { customerId: id }); if (!r.ok) throw r;
-      if (r.data.empty || !r.data.snapshot) { setSrcState({ status: 'ready', message: r.data.message || 'This sandbox customer has no accounts. Nothing changed.' }); return; }
+      if (r.data.empty || !r.data.snapshot) { setSrcState({ status: 'ready', message: r.data.message || 'This sandbox customer has no accounts. Nothing changed.' }); return false; }
       const { src, P } = fromSnapshot(r.data.snapshot, customer);
-      set(resetFor(src, P, NESSIE_BASE));
+      set(resetFor(src, P, NESSIE_BASE)); adopt(r.data.snapshot); H.pushProfile();
       setSrcState({ status: 'ready', message: 'Loaded ' + src.accounts + ' sandbox account' + (src.accounts === 1 ? '' : 's') + '. Add your take-home pay and any missing details below.' });
       H.addReceipt({ title: 'Data source · ' + src.label, verdict: 'Loaded', tone: 'info', kind: 'Data source', facts: [['Checking today', '—', money(P.checking)], ['Savings', '—', money(P.savings)], ['Owed', '—', money(P.owe)], ['Bills in next 30 days', '—', money(src.billsMonthly)]],
-        checks: [['Read-only sandbox data', true], ['Take-home pay included', false], ['APR included', false]], steps: [['Account data', 'DATA', 'Read accounts, bills, loans and transactions from the Nessie sandbox.'], ['Cleanup', 'CODE', 'Removed transfers between this customer’s own accounts.']], note: 'Nessie is test data, not a real bank. No money moved.' });
-    } catch (r) { setSrcState({ status: 'error', message: errText(r && r.data) }); }
+        checks: [['Read-only sandbox data', true], ['Take-home pay included', false], ['APR included', false]], steps: [['Account data', 'DATA', 'Read accounts, bills, loans and transactions from the Nessie sandbox.'], ['Cleanup', 'CODE', 'Removed transfers between this customer’s own accounts.']], note: 'Nessie is test data, not a real bank. No money moved.' }); return true;
+    } catch (r) { setSrcState({ status: 'error', message: errText(r && r.data) }); return false; }
   };
   H.openSetup = () => { set({ setup: true }); if (S().srcState.status === 'idle') H.loadCustomers(); }; H.closeSetup = () => set({ setup: false });
-  H.prof = k => memo('pf' + k, e => { const raw = e.target.value; const num = raw.replace(/[^0-9.]/g, ''); const v = k === 'goalName' ? raw : ['income', 'apr', 'minPay'].includes(k) && num === '' ? null : Math.max(0, +num || 0); set({ P: Object.assign({}, S().P, { [k]: v }) }); });
+  H.prof = k => memo('pf' + k, e => { const raw = e.target.value; const num = raw.replace(/[^0-9.]/g, ''); const v = k === 'goalName' ? raw : ['income', 'apr', 'minPay'].includes(k) && num === '' ? null : Math.max(0, +num || 0); set({ P: Object.assign({}, S().P, { [k]: v }) }); H.pushProfile(600); });
   H.how = k => memo('hw' + k, () => set({ how: k }));
   H.closeHow = () => set({ how: null });
   H.stop = e => e.stopPropagation();
-  H.showTip = e => { const el = e.currentTarget, r = el.getBoundingClientRect(), k = c._fitS || 1; set({ tip: { term: el.getAttribute('data-term'), x: (r.left + r.width / 2) / k, y: r.top / k, b: r.bottom / k } }); };
-  H.hideTip = () => set({ tip: null });
+  // The glossary popup stays open briefly after the pointer leaves the word, so its Follow-up button can be reached.
+  H.showTip = e => { clearTimeout(c._tipT); const el = e.currentTarget, r = el.getBoundingClientRect(), k = c._fitS || 1; set({ tip: { term: el.getAttribute('data-term'), x: (r.left + r.width / 2) / k, y: r.top / k, b: r.bottom / k } }); };
+  H.hideTip = () => { clearTimeout(c._tipT); c._tipT = setTimeout(() => set({ tip: null }), 250); };
+  H.keepTip = () => clearTimeout(c._tipT);
+  H.followTip = () => { const t = S().tip, g = t && GLOSSARY[t.term]; clearTimeout(c._tipT); set({ tip: null }); if (g) H.send('Tell me more about ' + g[0].toLowerCase() + '. What does it mean for me?', { term: g[0] }); };
   H.chatRef = el => { c._chatEl = el; };
   // The quick-ask row scrolls sideways; let a normal mouse wheel do that.
   H.chipsRef = el => { if (!el || el._wheel) return; el._wheel = true; el.addEventListener('wheel', e => { if (el.scrollWidth > el.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { el.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false }); };
@@ -537,45 +684,58 @@ function handlers(c) {
   H.goalSend = () => { const t = S().goalText.trim(); if (!t) return; set({ goalText: '' }); H.send(t); };
   H.ask = q => memo('ask' + q, () => H.send(q));
   H.trace = i => memo('tr' + i, () => set({ traceOpen: S().traceOpen === i ? -1 : i }));
-  H.send = async (q) => {
+  // Kip's answers come from the NextMove agent workflow (/runs). Without the server or its AI, Kip falls back to labeled calculator answers.
+  H.send = async (q, ctx) => {
     const s = S(); const text = (typeof q === 'string' ? q : s.chatInput).trim(); if (!text || s.chatBusy) return;
     const chat = s.chat.concat([{ role: 'user', text }]);
-    const aiOn = aiAvailable(); let step = aiOn ? 0 : 1;
-    set({ chat, chatInput: '', chatBusy: true, chatStep: step, drawer: 'kip' });
-    // Calculator mode only steps through the code checks that actually run.
-    H.chatScroll(); clearInterval(c._civ); c._civ = setInterval(() => { step = Math.min(aiOn ? 4 : 2, step + 1); set({ chatStep: step }); }, 650);
-    let answer, live = true, usedTool = false;
-    const tools = [
-      { name: 'add_goal', description: 'Add (or update) a financial goal on the user’s Koin money stream when they state a goal: saving for something, or paying off a debt. Returns verified figures to use in your reply.',
-        input_schema: { type: 'object', properties: {
-          kind: { type: 'string', enum: ['save', 'payoff'] },
-          type: { type: 'string', enum: Object.keys(TYPES) },
-          name: { type: 'string', description: 'Short friendly name, e.g. “Japan trip”, “Student loans”' },
-          amount: { type: 'number', description: 'Dollars. Save goals: target amount. Payoff goals: current balance owed.' },
-          saved: { type: 'number', description: 'Already saved toward it, if mentioned' },
-          apr: { type: 'number', description: 'Annual interest rate in percent, debts only, if mentioned' },
-          monthly: { type: 'number', description: 'Monthly amount they want to put toward it, if mentioned' },
-          deadline: { type: 'string', description: 'Target date YYYY-MM-DD if mentioned (today is ' + TODAY + ')' } }, required: ['kind', 'type', 'amount'] },
-        run: async (input) => { usedTool = true; return JSON.stringify(H.applyGoal(input, true)); } },
-      { name: 'remove_goal', description: 'Remove a goal the user added earlier.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
-        run: async (input) => { usedTool = true; return JSON.stringify(H.removeGoalByName(input.name)); } }];
-    try {
-      if (!window.claude || !window.claude.complete) throw new Error('no ai');
-      const ctx = c._ctx || {};
-      answer = await window.claude.complete({ max_tokens: 600, system: 'You are Kip, a cheerful koi fish and the money sidekick inside the Koin personal finance app. Answer in 2-4 short sentences (max 70 words), plain words, playful but clear. Plain text only: no markdown, no asterisks, no emoji. Use only figures given or returned by tools; never invent numbers. Write durations as “X months and Y days” (a month is 30 days), never decimal months. Koin never moves money; approvals only change the user’s plan. A payment is unsafe if checking would dip under the safety cushion. When the user states a goal (saving for something or paying off a debt), call add_goal right away, then confirm it with the returned figures. If the rate, monthly amount or deadline is missing, still call add_goal: Koin fills in typical defaults (mention that they can adjust it on the goal card). Only ask a follow-up if there is no dollar amount at all. Current figures (' + (SRC.kind === 'demo' ? 'made-up demo data' : 'Nessie sandbox test data') + '): ' + JSON.stringify(ctx),
-        messages: chat.filter((m, i) => i > 0).slice(-8).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })), tools });
-    } catch (err) {
-      live = false; await new Promise(r => setTimeout(r, 1500)); const pg = parseGoal(text);
-      const isQ = /\?\s*$/.test(text) || /^(how|when|why|what|where|can|could|should|is|am|do|does|will)\b/i.test(text);
-      if (isQ) answer = canned(text, c._ctx || {});
-      else if (pg && pg.amount) { const r = H.applyGoal(pg, false); usedTool = true; answer = r.ok ? 'Added ' + r.goal + ' to your stream! At ' + money(r.monthlyPayment) + ' a month ' + (r.kind === 'save' ? 'you’ll reach ' + money(r.amount) : 'it’s paid off') + ' in ' + r.reachedOrPaidOffIn + (r.date ? ' (' + r.date + ')' : '') + '.' + (r.replacedRent ? ' I swapped your ' + money(r.replacedRent) + ' rent for the mortgage payment.' : '') + (r.unassignedPerMonthAfter === null ? ' Add your take-home pay in Data & goals so I can check it against your budget.' : r.overBudget ? ' Heads up: that’s over budget, you’d have ' + money(r.unassignedPerMonthAfter) + ' a month unassigned.' : ' You’d still have ' + money(r.unassignedPerMonthAfter) + ' a month unassigned.') : r.error; }
-      else if (pg && !pg.amount) answer = 'Ooh, a new goal! How much is it? Tell me the target to save, or the balance you owe.';
-      else answer = canned(text, c._ctx || {});
+    let step = 0;
+    set({ chat, chatInput: '', chatBusy: true, chatStep: 0, drawer: 'kip' });
+    H.chatScroll(); clearInterval(c._civ); c._civ = setInterval(() => { step = Math.min(4, step + 1); set({ chatStep: step }); }, 650);
+    let msg = null, why = 'The NextMove server isn’t available.';
+    if (c._serverOk) {
+      try {
+        const r = await runServer('/runs', Object.assign({ message: text.slice(0, 2000) }, ctx && ctx.term ? { context: { term: ctx.term } } : {}));
+        const rc = r.ok && r.data.status === 'completed' ? r.data.receipt : null;
+        if (rc && !(rc.provenance && rc.provenance.mode === 'deterministic')) msg = H.kipFromReceipt(rc, text);
+        else why = rc ? 'AI isn’t configured on the server.' : reviewError(r);
+      } catch (e) { why = e && e.message === 'NOT_IN_STEP' ? 'The page and server numbers are out of step.' : 'The NextMove server couldn’t be reached.'; }
     }
+    if (!msg) msg = localAnswer(text, why);
     clearInterval(c._civ);
-    answer = String(answer || '').replace(/\*\*(.+?)\*\*/g, '$1').replace(/(^|\s)\*(\S[^*]*?)\*/g, '$1$2').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\uFE0F?/gu, '').trim();
-    c.setState(st => ({ chat: (st.chat || chat).concat([{ role: 'kip', text: answer || 'Done!', trace: true, live }]), chatBusy: false, chatStep: 5 })); H.chatScroll();
-    if (!usedTool) H.addReceipt({ title: 'Asked Kip · “' + (text.length > 38 ? text.slice(0, 38) + '…' : text) + '”', verdict: live ? 'Answered' : 'Calculator only', tone: 'info', kind: 'Kip answer', facts: [['Lowest balance ahead', money((c._ctx || {}).lowestBalance || 0), money((c._ctx || {}).lowestBalance || 0)]], checks: [['Uses verified figures only', true]], steps: chatTrace(live).map(x => [x[0], x[1], x[2] + (x[3] ? '' : '.'), x[3]]), note: live ? 'Answer written by AI from verified figures.' : 'AI unavailable: calculator-only answer.' });
+    c.setState(st => ({ chat: (st.chat || chat).concat([Object.assign({ role: 'kip', trace: true }, msg)]), chatBusy: false, chatStep: 5 })); H.chatScroll();
+  };
+  H.kipFromReceipt = (rc, text) => {
+    const steps = traceSteps(rc), msg = { text: rc.summary, steps, src: srcLabel(rc), live: true };
+    if (rc.kind === 'propose_goal' && rc.proposedGoal) msg.action = { label: 'Add to my stream', kind: 'goal', goal: rc.proposedGoal, said: text };
+    if (rc.kind === 'compare' && rc.proposedAction) msg.action = { label: 'Review it on the payment card', kind: 'pay', pay: rc.proposedAction };
+    const f = rc.facts || {};
+    H.addReceipt({ title: 'Asked Kip · “' + (text.length > 38 ? text.slice(0, 38) + '…' : text) + '”', verdict: rc.status === 'ready' ? 'Answered' : 'Needs info', tone: 'info', kind: 'Kip answer',
+      facts: [['Lowest balance ahead', '—', f.lowest_balance || '—'], ['Safety cushion', '—', f.cushion || '—']].filter(x => x[2] !== '—'), checks: [['Figures filled in by the finance engine', true], ['Answer passed the server’s checks', true]], steps, note: rc.summary });
+    return msg;
+  };
+  // Buttons on Kip's messages. Nothing changes until the user taps one.
+  H.chatAction = i => memo('ca' + i, () => {
+    const m = S().chat[i], a = m && m.action; if (!a || m.actionDone) return;
+    c.setState(st => ({ chat: st.chat.map((x, j) => j === i ? Object.assign({}, x, { actionDone: true }) : x) }));
+    if (a.kind === 'goal') {
+      const g = a.goal, pg = parseGoal(g.name + ' ' + a.said);
+      const type = pg && TYPES[pg.type] && TYPES[pg.type].kind === g.kind ? pg.type : g.kind === 'save' ? 'other_save' : 'other_debt';
+      const r = H.applyGoal({ kind: g.kind, type, name: g.name, amount: g.amountCents / 100, monthly: g.monthlyCents == null ? null : g.monthlyCents / 100, apr: g.aprBps == null ? null : g.aprBps / 100, deadline: g.deadline }, true);
+      H.toast(r.ok ? r.goal + ' added to your stream.' : r.error);
+    } else if (a.kind === 'pay') {
+      const p = a.pay, list = payDates(), idx = list.findIndex(d => d.date === p.date);
+      set({ drawer: null, pay: Object.assign({}, S().pay, { amount: String(Math.floor(p.amountCents / 100)), dateIdx: idx >= 0 ? idx : S().pay.dateIdx, customDate: idx >= 0 ? null : p.date, phase: 'idle' }) });
+      H.jump(0)(); setTimeout(H.payReview, 60);
+    }
+  });
+  // Calculator-only answers when the agents can't run: keyword-matched and clearly labeled.
+  const localAnswer = (text, why) => {
+    const pg = parseGoal(text), isQ = /\?\s*$/.test(text) || /^(how|when|why|what|where|can|could|should|is|am|do|does|will|tell)\b/i.test(text);
+    let answer;
+    if (!isQ && pg && pg.amount) { const r = H.applyGoal(pg, false); answer = r.ok ? 'Added ' + r.goal + ' to your stream! At ' + money(r.monthlyPayment) + ' a month ' + (r.kind === 'save' ? 'you’ll reach ' + money(r.amount) : 'it’s paid off') + ' in ' + r.reachedOrPaidOffIn + (r.date ? ' (' + r.date + ')' : '') + '.' : r.error; }
+    else if (!isQ && pg) answer = 'Ooh, a new goal! How much is it? Tell me the target to save, or the balance you owe.';
+    else answer = canned(text, c._ctx || {});
+    return { text: answer, steps: chatTrace(false), src: 'Calculator only · ' + why, live: false };
   };
   c._h = H; return H;
 }
@@ -604,9 +764,15 @@ function view(c, React, L) {
   const yrs = horizonFor(pre); const HM = 12 * yrs - 1;
   const sim = compute(s.lv, P, s.goals, s.route, planned, false, HM), plan = compute(s.plan, P, s.goals, s.route, planned, true, HM);
   const changed = LEVERS.some(l => s.lv[l.id] !== s.plan[l.id]) || s.goals.some(g => !g.fixed && g.monthly !== g.planMonthly);
+  if (!c._started) { c._started = true; setTimeout(H.init, 0); }
+  // Agents are used only while the server's 30-day outlook for the saved plan matches this page to the cent.
+  const srv = s.srv, inStep = srv.status === 'ready' && (srv.pending || srv.minCash === cents(plan.lowest));
+  c._serverOk = inStep; c._changed = changed;
+  const kipStatus = srv.status === 'connecting' ? 'Connecting to the NextMove agents…' : inStep ? 'NextMove agents · math by code, words by AI'
+    : srv.status === 'ready' ? 'Page and server numbers differ, so answers are calculator-only' : (srv.message || 'Calculator-only answers');
   const hist = history(P, s.lv);
   // payment preview
-  const pAmt = +s.pay.amount || 0, pDate = payDates()[s.pay.dateIdx].date;
+  const pAmt = +s.pay.amount || 0, pDate = payDateOf(s.pay);
   const prev = pAmt > 0 ? compute(s.lv, P, s.goals, s.route, planned.concat([{ amount: pAmt, date: pDate, preview: true }]), false, HM) : null;
   const payOk = prev ? prev.lowest >= P.cushion : false;
   let safer = null;
@@ -744,14 +910,19 @@ function view(c, React, L) {
   const low = { value: money(sim.lowest), date: fDay(sim.lowestDate), gap: sim.gap >= 0 ? money(sim.gap) + ' above your cushion' : money(-sim.gap) + ' below your cushion', tone: T(lowTone), toneSoft: T(lowTone + '-soft'),
     title: sim.lowest < 0 ? 'Below zero' : sim.gap < 0 ? 'Under the cushion' : sim.gap < 100 ? 'Shallow water' : 'Plenty of water',
     why: SRC.kind === 'demo' && sim.li >= 7 && sim.li <= 8 ? 'Rent and utilities land before your Nov 14 paycheck. Money out is counted before money in.' : 'The lowest point in the next 30 days, after listed bills, habits and goals.' };
-  const pr = s.pay;
-  const pay = { amount: pr.amount, chips: payDates().map((d, i) => ({ label: d.label, sub: d.sub, active: i === pr.dateIdx, onClick: H.payDate(i), bg: i === pr.dateIdx ? T('ink') : 'transparent', fg: i === pr.dateIdx ? T('bg') : T('ink'), bd: i === pr.dateIdx ? T('ink') : T('line') })),
+  const pr = s.pay, pres = pr.phase === 'done' ? pr.res : null, prc = pres && pres.receipt;
+  const chipList = payDates().map((d, i) => ({ d, on: pr.customDate ? d.date === pr.customDate : i === pr.dateIdx, click: H.payDate(i) }));
+  if (pr.customDate && !chipList.some(x => x.on)) chipList.push({ d: { label: 'Suggested', sub: fDay(pr.customDate) }, on: true, click: H.stop });
+  const payV = prc ? VERDICT[prc.verdict] || ['Reviewed', 'info'] : pres ? ['Couldn’t check', 'warn'] : null;
+  const pOpt = prc && prc.selected && prc.selected !== 'requested' && prc.options ? prc.options[prc.selected] : null;
+  const pay = { amount: pr.amount, chips: chipList.map(x => ({ label: x.d.label, sub: x.d.sub, active: x.on, onClick: x.click, bg: x.on ? T('ink') : 'transparent', fg: x.on ? T('bg') : T('ink'), bd: x.on ? T('ink') : T('line') })),
     rows: payFacts.map(r => ({ label: r[0], before: r[1], after: r[2] })), hasRows: payFacts.length > 0,
     idle: pr.phase === 'idle', reviewing: pr.phase === 'reviewing', done: pr.phase === 'done',
-    steps: stepRows(payStepsRaw.map(x => x.slice(0, 3)), pr.phase === 'reviewing' ? pr.step : undefined),
-    ok: payOk, verdict: payOk ? 'Looks safe' : 'Not recommended', vTone: T(payOk ? 'good' : 'bad'), vBg: T(payOk ? 'good-soft' : 'bad-soft'),
-    summary: !prev ? '' : payOk ? 'Checking stays at least ' + money(prev.lowest) + '. You’d owe ' + money(prev.owe) + ' and be card-free ' + (prev.debtDate ? 'by ' + fMonth(prev.debtDate) : 'eventually') + '.' : 'Checking would drop to ' + money(prev.lowest) + ' on ' + fDay(prev.lowestDate) + ', under your ' + money(P.cushion) + ' cushion.',
-    hasSafer: !!safer, safer: safer ? safer.label : '', canReview: pAmt > 0,
+    steps: stepRows(c._serverOk ? [['Financial engine', 'CODE', ''], ['Verifier', 'CODE', ''], ['Strategist', 'AI', ''], ['Coach', 'AI', '']] : payStepsRaw.map(x => x.slice(0, 3)), pr.phase === 'reviewing' ? pr.step : undefined),
+    ok: pres ? !!prc && prc.policy === 'allowed' : payOk, verdict: payV ? payV[0] : payOk ? 'Looks safe' : 'Not recommended', vTone: T(payV ? payV[1] : payOk ? 'good' : 'bad'), vBg: T((payV ? payV[1] : payOk ? 'good' : 'bad') + '-soft'),
+    by: prc ? srcLabel(prc) : pres ? '' : 'Calculator check · server unavailable', hasBy: !!prc || !pres,
+    summary: pres ? (prc ? prc.summary : pres.error) : !prev ? '' : payOk ? 'Checking stays at least ' + money(prev.lowest) + '. You’d owe ' + money(prev.owe) + ' and be card-free ' + (prev.debtDate ? 'by ' + fMonth(prev.debtDate) : 'eventually') + '.' : 'Checking would drop to ' + money(prev.lowest) + ' on ' + fDay(prev.lowestDate) + ', under your ' + money(P.cushion) + ' cushion.',
+    hasSafer: pres ? !!pOpt : !!safer, safer: pOpt ? 'pay ' + money(Math.floor(pOpt.amountCents / 100)) + ' on ' + fDay(pOpt.date) : safer ? safer.label : '', canReview: pAmt > 0,
     planned: s.planned.map(p => ({ id: p.id, label: money(p.amount) + ' on ' + fDay(p.date), remove: H.removePlanned(p.id) })), hasPlanned: s.planned.length > 0 };
   const upcoming = []; sim.days.forEach((d, i) => d.ev.forEach(e => { if (!(i === 0 && e.k === 'bill')) if (Math.round(e.amt) !== 0) upcoming.push({ date: fDay(d.date), label: e.label, amt: smoney(e.amt), tone: T(e.amt > 0 ? 'good' : 'ink'), after: money(d.bal) }); }));
   const spendRows = LEVERS.filter(l => l.kind === 'spend').map(l => ({ label: l.label, plan: money(s.plan[l.id]), sim: money(s.lv[l.id]), pPlan: (s.plan[l.id] / 600 * 100).toFixed(1) + '%', pSim: (s.lv[l.id] / 600 * 100).toFixed(1) + '%', dText: s.lv[l.id] === s.plan[l.id] ? '' : smoney(s.lv[l.id] - s.plan[l.id]), dTone: T(s.lv[l.id] < s.plan[l.id] ? 'good' : 'bad') }));
@@ -767,7 +938,8 @@ function view(c, React, L) {
     const facts = [['Monthly', money(planBase), money(baseM)], [g.kind === 'save' ? 'Reached in' : 'Paid off in', fmtDur(rp.months), fmtDur(r.months)], ['Unassigned each month', money(plan.leftover), money(sim.leftover)]];
     const stepsRaw = [['Financial engine', 'CODE', 'Recalculated this goal and your monthly budget.'], ['Verifier', 'CODE', ok ? 'Fits your budget and keeps your cushion. Passed.' : sim.leftover < 0 ? 'Over budget by ' + money(-sim.leftover) + ' a month. Blocked.' : 'Would dip under your cushion. Blocked.'], ['Coach', 'AI', 'Summarized the change with verified figures.']];
     c._goalResult[g.id] = { name: g.name, from: money(planBase), to: money(baseM), facts, stepsRaw };
-    const mine = gr.id === g.id;
+    const mine = gr.id === g.id; const gres = mine && gr.phase === 'done' ? gr.res : null, grc = gres && gres.receipt, gv = grc ? VERDICT[grc.verdict] || ['Reviewed', 'info'] : gres ? ['Couldn’t check', 'warn'] : null;
+    const viaServer = isSaveGoal(g) && c._serverOk;
     const isSave = g.kind === 'save';
     const pct = isSave ? Math.min(100, g.saved / g.target * 100) : 0;
     const late = isSave && g.deadline && r.date && r.date > g.deadline;
@@ -779,8 +951,9 @@ function view(c, React, L) {
       hasRouted: s.route === g.id && sim.freed > 0, routed: '+' + money(Math.max(0, sim.freed)) + ' freed up',
       down: H.bump(g.id, -25), up: H.bump(g.id, 25), removable: !g.fixed, remove: H.removeGoal(g.id), note, hasNote: !!note,
       changed: chg, idle: !mine || gr.phase === 'idle', reviewing: mine && gr.phase === 'reviewing', done: mine && gr.phase === 'done', showReview: chg && (!mine || gr.phase === 'idle'),
-      review: H.goalReview(g.id), approve: H.goalApprove(g.id), cancel: H.goalCancel, ok, verdict: ok ? 'Looks good' : 'Over budget', vTone: T(ok ? 'good' : 'bad'), vBg: T(ok ? 'good-soft' : 'bad-soft'),
-      steps: stepRows(stepsRaw, mine && gr.phase === 'reviewing' ? gr.step : undefined), showNote: !!note && !(mine && gr.phase !== 'idle') };
+      review: H.goalReview(g.id), approve: H.goalApprove(g.id), cancel: H.goalCancel, ok: gres ? !!grc && grc.policy === 'allowed' : ok, verdict: gv ? gv[0] : ok ? 'Looks good' : 'Over budget', vTone: T(gv ? gv[1] : ok ? 'good' : 'bad'), vBg: T((gv ? gv[1] : ok ? 'good' : 'bad') + '-soft'),
+      summary: gres ? (grc ? grc.summary : gres.error) : 'Calculator check: ' + (ok ? 'fits your budget and keeps your cushion.' : 'over budget or under your cushion.') + (isSave ? '' : ' Debt changes aren’t reviewed by the agents yet.'),
+      steps: stepRows(viaServer ? [['Financial engine', 'CODE', ''], ['Verifier', 'CODE', ''], ['Coach', 'AI', '']] : stepsRaw, mine && gr.phase === 'reviewing' ? gr.step : undefined), showNote: !!note && !(mine && gr.phase !== 'idle') };
   });
   const hubGoals = goalCards.map(gc => ({ name: gc.name, date: gc.bigDate, color: gc.color, verb: gc.verb, onClick: H.jump(Math.max(0, gc.left - 200)) }));
   const lr = s.lockRev; const nd = moneyDelta(plan.nw12, sim.nw12);
@@ -802,7 +975,8 @@ function view(c, React, L) {
   for (let i = 0, x = 60; x < xEnd; i++, x += 90 + (i * 41) % 120) pebbles.push({ x, w: 8 + (i * 5) % 10, h: 5 + (i * 3) % 4, top: bottom - 6 - (i * 3) % 4 });
 
   /* drawers */
-  const chat = s.chat.map((m, i) => ({ isKip: m.role === 'kip', isUser: m.role === 'user', text: m.text, hasTrace: !!m.trace, open: s.traceOpen === i, toggle: H.trace(i), src: m.live === false ? 'Calculator only · AI unavailable' : 'AI answer · verified figures', steps: stepRows(chatTrace(m.live !== false)) }));
+  const chat = s.chat.map((m, i) => ({ isKip: m.role === 'kip', isUser: m.role === 'user', text: m.text, hasTrace: !!m.trace, open: s.traceOpen === i, toggle: H.trace(i), src: m.src || (m.live === false ? 'Calculator only' : 'NextMove agents'), steps: stepRows(m.steps || chatTrace(m.live !== false)),
+    hasAction: !!m.action && !m.actionDone, actionLabel: m.action ? m.action.label : '', onAction: H.chatAction(i) }));
   const receipts = s.receipts.map(r => ({ id: r.id, when: r.when, title: r.title, verdict: r.verdict, vTone: T(r.tone), vBg: T(r.tone + '-soft'), kind: r.kind, onClick: H.openRec(r.id), active: s.openRec === r.id }));
   const rr = s.receipts.find(r => r.id === s.openRec);
   const rec = rr ? { title: rr.title, when: rr.when, kind: rr.kind, verdict: rr.verdict, vTone: T(rr.tone), vBg: T(rr.tone + '-soft'), facts: rr.facts.map(x => ({ label: x[0], before: x[1], after: x[2] })), checks: rr.checks.map(x => ({ label: x[0], mark: x[1] ? '✓' : '✕', tone: T(x[1] ? 'good' : 'bad') })), steps: stepRows(rr.steps), note: rr.note } : null;
@@ -834,7 +1008,7 @@ function view(c, React, L) {
     lockReview: H.lockReview, lockApprove: H.lockApprove, lockCancel: H.lockCancel, lockDock: H.lockDock(Math.max(0, Math.round(cardL.year + yearW - vw + 40))),
     levers, routeOpts, routeSel: H.routeSel, route: s.route, routeSelect: h('select', { value: s.route, onChange: H.routeSel, 'aria-label': 'Send freed-up cash to', style: { height: 36, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 11, background: 'var(--surface2)', color: 'var(--ink)', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', fontFamily: 'inherit' } }, routeOpts.map(o => h('option', { key: o.value, value: o.value }, o.label))), freed, changed, reset: H.reset,
     drawerKip: s.drawer === 'kip', drawerReceipts: s.drawer === 'receipts', openKip: H.openKip, openReceipts: H.openReceipts, closeDrawer: H.closeDrawer,
-    chat, chatRef: H.chatRef, chatInput: s.chatInput, setChatInput: H.chatInput, chatKey: H.chatKey, sendChat: H.send, chatBusy: s.chatBusy, kipLoader: kipLoader(React, s.chatStep, 'happy'), busy: (() => { const x = CHAT_STEPS[Math.min(4, s.chatStep)]; const [bg, fg] = STEP_TONE[x[1]]; return { agent: x[0], kind: x[1], kBg: T(bg), kFg: T(fg), text: x[2] + '…', who: x[1] === 'AI' ? 'AI agent' : 'code check' }; })(), busySteps: stepRows(chatTrace(aiAvailable()), s.chatStep), suggestions: (() => { const asked = new Set(s.chat.filter(m => m.role === 'user').map(m => m.text));
+    chat, chatRef: H.chatRef, chatInput: s.chatInput, setChatInput: H.chatInput, chatKey: H.chatKey, sendChat: H.send, chatBusy: s.chatBusy, kipLoader: kipLoader(React, s.chatStep, 'happy'), busy: (() => { const x = CHAT_STEPS[Math.min(4, s.chatStep)]; const [bg, fg] = STEP_TONE[x[1]]; return { agent: x[0], kind: x[1], kBg: T(bg), kFg: T(fg), text: x[2] + '…', who: x[1] === 'AI' ? 'AI agent' : 'code check' }; })(), busySteps: stepRows(chatTrace(!!c._serverOk), s.chatStep), suggestions: (() => { const asked = new Set(s.chat.filter(m => m.role === 'user').map(m => m.text));
       const em = sim.goals.find(g => g.type === 'emergency') || sim.goals.find(g => g.kind === 'save');
       const qs = ['Why is ' + fDay(sim.lowestDate) + ' my lowest day?', 'Can I pay $300 on my card today?', 'Where is my money leaking?', 'When will I be debt-free?']
         .concat(em ? ['How long until my ' + em.name.toLowerCase() + ' is full?'] : [], ['What is a safety cushion?'], sim.goals.some(g => g.type === 'vacation') ? [] : ['Save $2,400 for a vacation by June'], ['Pay off $18,000 in student loans at 5%']);
@@ -843,15 +1017,16 @@ function view(c, React, L) {
     setupOpen: s.setup, openSetup: H.openSetup, closeSetup: H.closeSetup, stop: H.stop,
     fieldsMoney: demo ? [field('income', 'Take-home pay / month', '$'), field('rent', 'Rent', '$'), field('utilities', 'Utilities', '$'), field('cushion', 'Safety cushion', '$')]
       : [field('income', 'Take-home pay / month', '$', '', unknownPh), fixed(['Sandbox bills, next 30 days', String(Math.round(SRC.billsMonthly))]), field('cushion', 'Safety cushion', '$')],
-    fieldsDebt: demo ? [field('owe', 'Card balance', '$'), field('apr', 'Card APR', '', '%'), field('minPay', 'Minimum payment', '$'), field('checking', 'Checking today', '$')]
+    fieldsDebt: demo ? [field('owe', 'Card balance', '$', '', fromSandbox), field('apr', 'Card APR', '', '%'), field('minPay', 'Minimum payment', '$'), field('checking', 'Checking today', '$', '', fromSandbox)]
       : [field('owe', 'Owed on cards & loans', '$', '', fromSandbox), field('apr', 'APR', '', '%', unknownPh), field('minPay', 'Minimum payment / month', '$', '', unknownPh), field('checking', 'Checking today', '$', '', fromSandbox)],
-    fieldsGoal: [field('goalName', 'Goal name'), field('goalTarget', 'Target', '$'), field('savings', 'Saved so far', '$', '', demo ? null : fromSandbox)],
+    fieldsGoal: [field('goalName', 'Goal name'), field('goalTarget', 'Target', '$'), field('savings', 'Saved so far', '$', '', fromSandbox)],
     sourceSelect, sourceMsg: ss.message, hasSourceMsg: !!ss.message, sourceTone: T(ss.status === 'error' ? 'bad' : 'muted'), srcRo: demo ? 'READ-ONLY' : 'SANDBOX · READ-ONLY',
     setupNote: demo ? 'Everything updates live. Blank or zero means unknown.' : 'Grey fields come from the sandbox. Blank means unknown; Koin won’t guess it.',
     srcBadge: SRC.badge, srcBadgeBg: T(demo ? 'you-bg' : 'data-bg'), srcBadgeFg: T(demo ? 'you-fg' : 'data-fg'), todayLabel: 'TODAY · ' + fDay(TODAY).toUpperCase(),
     yearLabel: fMonth(addMonths(TODAY, 12)).toUpperCase() + ' · A YEAR FROM NOW', oweWhat: demo ? 'on your card' : 'on cards and loans',
     howOpen: !!howObj, how: howObj ? { title: howObj.title, intro: howObj.intro, note: howObj.note, steps: howObj.steps.map((x, i) => { const [bg, fg] = STEP_TONE[x[0]]; return { n: i + 1, kind: x[0], title: x[1], text: x[2], kBg: T(bg), kFg: T(fg) }; }) } : null,
     closeHow: H.closeHow, howStand: H.how('stand'), howForecast: H.how('forecast'), howPay: H.how('pay'), howApprove: H.how('approve'), howKip: H.how('kip'), howGoals: H.how('goals'),
+    kipStatus, tipEnter: H.keepTip, tipLeave: H.hideTip, followTip: H.followTip,
     tip: tipG ? { show: true, x: s.tip.x, y: below ? s.tip.b + 10 : s.tip.y - 10, tr: below ? 'translate(-50%,0)' : 'translate(-50%,-100%)', title: tipG[0], def: tipG[1] } : { show: false }, showTip: H.showTip, hideTip: H.hideTip,
     toast: s.toast ? { show: true, text: s.toast } : { show: false },
   };

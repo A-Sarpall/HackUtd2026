@@ -2,7 +2,7 @@ import {readFile} from 'node:fs/promises';
 import http from 'node:http';
 import {DatabaseSync} from 'node:sqlite';
 import {randomBytes,randomUUID,createHash} from 'node:crypto';
-import {snapshot,simulate,integer,goalImpact} from './finance.mjs';
+import {snapshot,simulate,integer,goalImpact,koinDemo} from './finance.mjs';
 import {runDecision,runActionReview} from './agents.mjs';
 import {enrich,validateProfile,compare,reviewFacts} from './intelligence.mjs';
 import {loadNessieSnapshot,listCustomers} from './nessie.mjs';
@@ -12,7 +12,7 @@ const runs=new Map();
 // Made-up starter goal for new demo sessions so the goal flow has something to show; users can edit or remove it.
 const EXAMPLE_GOAL={id:'example-emergency',kind:'emergency',name:'Emergency fund (example)',targetCents:300000,savedCents:60000,monthlyCents:30000};
 db.exec('CREATE TABLE IF NOT EXISTS planned_payments(id TEXT PRIMARY KEY,owner TEXT,amount INTEGER,date TEXT,created INTEGER)');
-for(const [column,type] of [['kind','TEXT'],['date','TEXT']])if(!db.prepare('PRAGMA table_info(actions)').all().some(c=>c.name===column))db.exec(`ALTER TABLE actions ADD COLUMN ${column} ${type}`);
+for(const [column,type] of [['kind','TEXT'],['date','TEXT'],['goal_id','TEXT']])if(!db.prepare('PRAGMA table_info(actions)').all().some(c=>c.name===column))db.exec(`ALTER TABLE actions ADD COLUMN ${column} ${type}`);
 if(!db.prepare('PRAGMA table_info(sessions)').all().some(c=>c.name==='created'))db.exec('ALTER TABLE sessions ADD COLUMN created INTEGER');
 db.prepare('UPDATE sessions SET created=? WHERE created IS NULL').run(Date.now());
 db.exec('CREATE TABLE IF NOT EXISTS profiles(owner TEXT PRIMARY KEY,data TEXT); CREATE TABLE IF NOT EXISTS snapshots(owner TEXT PRIMARY KEY,data TEXT); CREATE TABLE IF NOT EXISTS receipts(id TEXT PRIMARY KEY,owner TEXT,data TEXT); CREATE TABLE IF NOT EXISTS action_context(id TEXT PRIMARY KEY,snapshotId TEXT,snapshotVersion INTEGER,receiptId TEXT);');
@@ -64,7 +64,16 @@ function overLimit(key,limit,windowMs){
  w.count++;return w.count>limit?Math.max(1,Math.ceil((w.reset-now)/1000)):0;
 }
 function limited(res,retryAfter,code){res.setHeader('Retry-After',String(retryAfter));return json(res,429,{error:{code}});}
-function parseAction(a){if(!a||typeof a!=='object'||Array.isArray(a))throw Error('INVALID_ACTION');if(a.kind==='debt_payment'){if(typeof a.date!=='string')throw Error('INVALID_DATE');return {kind:'debt_payment',amountCents:integer(a.amountCents),date:a.date};}if(a.kind==='goal_contribution')return {kind:'goal_contribution',amountCents:integer(a.amountCents),date:null};throw Error('UNSUPPORTED_ACTION');}
+function parseAction(a){if(!a||typeof a!=='object'||Array.isArray(a))throw Error('INVALID_ACTION');if(a.kind==='debt_payment'){if(typeof a.date!=='string')throw Error('INVALID_DATE');return {kind:'debt_payment',amountCents:integer(a.amountCents),date:a.date};}if(a.kind==='goal_contribution'){if(a.goalId!=null&&(typeof a.goalId!=='string'||!a.goalId||a.goalId.length>80))throw Error('INVALID_GOAL');return {kind:'goal_contribution',amountCents:integer(a.amountCents),date:null,goalId:a.goalId??null};}throw Error('UNSUPPORTED_ACTION');}
+// Source key for a stored snapshot: a plan made against one customer's data never carries over to another source.
+const sourceKey=raw=>raw.customerId?'nessie:'+raw.customerId:raw.id;
+function storeSource(owner,next){
+ db.exec('BEGIN IMMEDIATE');
+ try{
+  if(sourceKey(source(owner))!==sourceKey(next)&&db.prepare('DELETE FROM planned_payments WHERE owner=?').run(owner).changes)db.prepare('INSERT INTO audit VALUES (?,?,?,?)').run(randomUUID(),owner,'clear-planned-on-source-change',Date.now());
+  db.prepare('INSERT OR REPLACE INTO snapshots VALUES (?,?)').run(owner,JSON.stringify(next));db.exec('COMMIT');
+ }catch(e){db.exec('ROLLBACK');throw e;}
+}
 const deny=(res,status,code)=>{json(res,status,{error:{code}});return true;};
 function requestGuard(req,res){
  if(config.publicOrigin&&req.headers.host!==new URL(config.publicOrigin).host)return deny(res,421,'HOST_DENIED');
@@ -132,19 +141,21 @@ if(requestGuard(req,res))return;
  if(path==='/api/v1/actions'&&req.method==='POST'){
   const b=await body(req);s=current(owner);const action=parseAction(b.kind?b:{...b,kind:'goal_contribution'});
   const goal=db.prepare('SELECT * FROM goals WHERE owner=?').get(owner);
-  if(action.kind==='goal_contribution'&&!s.goals[0])return json(res,400,{error:{code:'NO_GOAL'}});
+  const target=action.kind==='goal_contribution'?(action.goalId==null?s.goals[0]:s.goals.find(x=>x.id===action.goalId)):null;
+  if(action.kind==='goal_contribution'&&!target)return json(res,400,{error:{code:'NO_GOAL'}});
   if(b.receiptId){const row=db.prepare('SELECT data FROM receipts WHERE id=? AND owner=?').get(b.receiptId,owner);if(!row)throw Error('INVALID_RECEIPT');const receipt=JSON.parse(row.data);if(receipt.snapshotId!==s.id||receipt.snapshotVersion!==s.version||receipt.status!=='ready'||receipt.goalVersion!==goal.version)throw Error('STALE_RECEIPT');}
   let review;try{review=reviewFacts(s,action);}catch(error){if(['NO_GOAL','PAYMENT_EXCEEDS_DEBT','INVALID_AMOUNT'].includes(error.message))return json(res,400,{error:{code:error.message}});throw error;}
   // Server policy: an action that fails its safety check cannot be proposed or approved.
   if(review.policy==='blocked')return json(res,422,{error:{code:action.kind==='debt_payment'?'BELOW_CUSHION':'OVER_BUDGET'}});
   const id=randomUUID(),expires=Date.now()+300000;
-  const hash=createHash('sha256').update(JSON.stringify({owner,id,kind:action.kind,amountCents:action.amountCents,date:action.date,goalVersion:goal.version,snapshotId:s.id,snapshotVersion:s.version,receiptId:b.receiptId||null})).digest('hex');
+  const goalId=target?target.id:null;
+  const hash=createHash('sha256').update(JSON.stringify({owner,id,kind:action.kind,amountCents:action.amountCents,date:action.date,goalId,goalVersion:goal.version,snapshotId:s.id,snapshotVersion:s.version,receiptId:b.receiptId||null})).digest('hex');
   db.exec('BEGIN IMMEDIATE');
-  try{db.prepare('INSERT INTO actions(id,owner,amount,version,hash,expires,status,kind,date) VALUES (?,?,?,?,?,?,?,?,?)').run(id,owner,action.amountCents,goal.version,hash,expires,'proposed',action.kind,action.date);db.prepare('INSERT INTO action_context VALUES (?,?,?,?)').run(id,s.id,s.version,b.receiptId||null);db.exec('COMMIT');}
+  try{db.prepare('INSERT INTO actions(id,owner,amount,version,hash,expires,status,kind,date,goal_id) VALUES (?,?,?,?,?,?,?,?,?,?)').run(id,owner,action.amountCents,goal.version,hash,expires,'proposed',action.kind,action.date,goalId);db.prepare('INSERT INTO action_context VALUES (?,?,?,?)').run(id,s.id,s.version,b.receiptId||null);db.exec('COMMIT');}
   catch(error){db.exec('ROLLBACK');throw error;}
   const base={id,kind:action.kind,proposalHash:hash,expectedGoalVersion:goal.version,snapshotVersion:s.version,expires,warnings:review.warnings};
   if(action.kind==='debt_payment')return json(res,201,{...base,amountCents:action.amountCents,date:action.date,comparison:review.comparison,effect:'Adds this extra payment to your NextMove plan and outlook. NextMove does not send money; pay your lender directly.'});
-  return json(res,201,{...base,oldAmountCents:goal.amount,newAmountCents:action.amountCents,goalImpact:goalImpact(s.goals[0],goal.amount,action.amountCents),progressNow:review.progressNow,progressNew:review.progressNew,leftoverNowCents:review.leftoverNowCents,leftoverNewCents:review.leftoverNewCents,effect:'Changes your goal’s monthly amount in NextMove. No money moves and no transfer is scheduled.'});
+  return json(res,201,{...base,goalId,oldAmountCents:target.monthlyCents,newAmountCents:action.amountCents,goalImpact:goalImpact(target,target.monthlyCents,action.amountCents),progressNow:review.progressNow,progressNew:review.progressNew,leftoverNowCents:review.leftoverNowCents,leftoverNewCents:review.leftoverNewCents,effect:'Changes your goal’s monthly amount in NextMove. No money moves and no transfer is scheduled.'});
  }
  if(/^\/api\/v1\/actions\/[^/]+\/approve$/.test(path)&&req.method==='POST'){
   const b=await body(req),id=path.split('/')[4];s=current(owner);
@@ -158,10 +169,17 @@ if(requestGuard(req,res))return;
    const kind=a.kind||'goal_contribution';
    const fresh=context&&context.snapshotId===s.id&&context.snapshotVersion===s.version&&a.expires>=Date.now()&&g.version===a.version&&b.expectedGoalVersion===g.version&&b.snapshotVersion===s.version;
    // Re-run the safety check at approval time as defense in depth.
-   const stillAllowed=fresh&&(kind==='goal_contribution'?!!s.goals[0]:true)&&reviewFacts(s,{kind,amountCents:a.amount,date:a.date}).policy==='allowed';
+   const goalIndex=kind==='goal_contribution'?(a.goal_id==null?0:s.goals.findIndex(x=>x.id===a.goal_id)):-1;
+   const stillAllowed=fresh&&(kind==='goal_contribution'?goalIndex>=0&&!!s.goals[goalIndex]:true)&&reviewFacts(s,{kind,amountCents:a.amount,date:a.date,goalId:a.goal_id??null}).policy==='allowed';
    if(!stillAllowed){db.exec('ROLLBACK');return json(res,409,{error:{code:'STALE_APPROVAL'}});}
    if(kind==='debt_payment'){db.prepare('INSERT INTO planned_payments VALUES (?,?,?,?,?)').run(id,owner,a.amount,a.date,Date.now());db.prepare('INSERT OR REPLACE INTO snapshots VALUES (?,?)').run(owner,JSON.stringify({...source(owner),version:s.version+1}));}
-   else db.prepare('UPDATE goals SET amount=?,version=version+1 WHERE owner=?').run(a.amount,owner);
+   else if(goalIndex===0)db.prepare('UPDATE goals SET amount=?,version=version+1 WHERE owner=?').run(a.amount,owner);
+   else{
+    // Goals after the first keep their monthly amount in the saved profile; the goal version still advances so older proposals go stale.
+    const p=profile(owner);p.goals[goalIndex].monthlyCents=a.amount;db.prepare('INSERT OR REPLACE INTO profiles VALUES (?,?)').run(owner,JSON.stringify(p));db.prepare('UPDATE goals SET version=version+1 WHERE owner=?').run(owner);
+   }
+   // Goal contributions can appear in the cash outlook (Koin schedules them), so the snapshot version advances with any goal change.
+   if(kind==='goal_contribution'&&profile(owner).goalContributionDay!=null)db.prepare('INSERT OR REPLACE INTO snapshots VALUES (?,?)').run(owner,JSON.stringify({...source(owner),version:s.version+1}));
    db.prepare("UPDATE actions SET status='completed' WHERE id=?").run(id);db.prepare('INSERT INTO audit VALUES (?,?,?,?)').run(randomUUID(),owner,id,Date.now());
    if(context.receiptId){const row=db.prepare('SELECT data FROM receipts WHERE id=? AND owner=?').get(context.receiptId,owner);if(row){const receipt=JSON.parse(row.data);receipt.actionId=id;receipt.actionStatus='completed';db.prepare('UPDATE receipts SET data=? WHERE id=?').run(JSON.stringify(receipt),context.receiptId);}}
    db.exec('COMMIT');return json(res,200,{id,kind,status:'completed'});
@@ -176,7 +194,9 @@ if(requestGuard(req,res))return;
   return json(res,200,current(owner));
  }
  if(path==='/api/v1/sync'&&req.method==='POST'){
-   try{const b=await body(req);s=current(owner);const next=await loadNessieSnapshot(s.version+1,b.customerId||s.customerId);const latest=current(owner);if(latest.id!==s.id||latest.version!==s.version||latest.goal.version!==s.goal.version)return json(res,409,{error:{code:'STALE_SNAPSHOT'}});next.customerId=b.customerId||s.customerId;db.prepare('INSERT OR REPLACE INTO snapshots VALUES (?,?)').run(owner,JSON.stringify(next));const refreshed=current(owner);return json(res,200,{ok:true,mode:'nessie_live',snapshot:refreshed,provider:refreshed.provider});}
+   try{const b=await body(req);s=current(owner);
+    if(b.source==='demo'){storeSource(owner,{...koinDemo(),version:s.version+1});const refreshed=current(owner);return json(res,200,{ok:true,mode:'synthetic_fixture',snapshot:refreshed});}
+    const next=await loadNessieSnapshot(s.version+1,b.customerId||s.customerId);const latest=current(owner);if(latest.id!==s.id||latest.version!==s.version||latest.goal.version!==s.goal.version)return json(res,409,{error:{code:'STALE_SNAPSHOT'}});next.customerId=b.customerId||s.customerId;storeSource(owner,next);const refreshed=current(owner);return json(res,200,{ok:true,mode:'nessie_live',snapshot:refreshed,provider:refreshed.provider});}
    catch(error){
     const code=nessieCode(error);
     if(code==='NESSIE_EMPTY')return json(res,200,{ok:true,connected:true,empty:true,mode:'nessie_empty',snapshot:null,provider:{name:'Nessie v2',customers:0,accounts:0},message:'Connected to the Nessie sandbox, but this customer has no accounts. Your current data is unchanged.'});

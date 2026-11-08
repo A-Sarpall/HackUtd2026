@@ -263,7 +263,8 @@ input,button,select,textarea{font-family:inherit}
           </sc-if>
           <sc-if value="{{ pay.done }}" hint-placeholder-val="{{ false }}">
             <div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:{{ pay.vBg }};color:{{ pay.vTone }}">{{ pay.verdict }}</span><button onClick="{{ howApprove }}" style="border:0;background:transparent;color:var(--muted);font-size:11.5px;text-decoration:underline;cursor:pointer;padding:0">What does approving do?</button></div>
-            <p style="margin:0;font-size:13px;line-height:1.45;text-wrap:pretty">{{ pay.summary }}</p>
+            <p data-noscrolljack style="margin:0;font-size:12.5px;line-height:1.45;text-wrap:pretty;max-height:96px;overflow-y:auto">{{ pay.summary }}</p>
+            <sc-if value="{{ pay.hasBy }}" hint-placeholder-val="{{ false }}"><span style="margin-top:-4px;font-size:10.5px;color:var(--muted)">{{ pay.by }}</span></sc-if>
             <sc-if value="{{ pay.hasSafer }}" hint-placeholder-val="{{ false }}">
               <button onClick="{{ paySafer }}" style="align-self:flex-start;height:34px;padding:0 12px;border-radius:10px;border:1.5px solid var(--good);background:var(--good-soft);color:var(--good);font-size:12.5px;font-weight:700;cursor:pointer">Try it: {{ pay.safer }}</button>
             </sc-if>
@@ -363,6 +364,7 @@ input,button,select,textarea{font-family:inherit}
             </sc-if>
             <sc-if value="{{ gc.done }}" hint-placeholder-val="{{ false }}">
               <div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:{{ gc.vBg }};color:{{ gc.vTone }}">{{ gc.verdict }}</span><button onClick="{{ howApprove }}" style="border:0;background:transparent;color:var(--muted);font-size:11.5px;text-decoration:underline;cursor:pointer;padding:0">What does approving do?</button></div>
+              <p data-noscrolljack style="margin:0;font-size:12px;line-height:1.42;max-height:76px;overflow-y:auto;text-wrap:pretty">{{ gc.summary }}</p>
               <div style="display:flex;gap:8px">
                 <sc-if value="{{ gc.ok }}" hint-placeholder-val="{{ false }}"><button onClick="{{ gc.approve }}" style="height:36px;padding:0 14px;border:0;border-radius:11px;background:var(--good);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">Approve change</button></sc-if>
                 <button onClick="{{ gc.cancel }}" style="height:36px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:transparent;color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer">Back</button>
@@ -486,7 +488,7 @@ input,button,select,textarea{font-family:inherit}
     <aside data-screen-label="Ask Kip" style="position:absolute;top:76px;right:0;bottom:170px;width:400px;display:flex;flex-direction:column;background:var(--surface);border-left:1px solid var(--line);box-shadow:-24px 0 48px rgba(0,0,0,.14);z-index:30;animation:koinSlide .35s cubic-bezier(.2,.8,.2,1)">
       <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)">
         <span style="width:40px;height:40px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center">{{ kipChat }}</span>
-        <div style="display:flex;flex-direction:column"><span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:17px">Ask Kip</span><span style="font-size:11.5px;color:var(--muted)">Your Sidekick · math by code, words by AI</span></div>
+        <div style="display:flex;flex-direction:column"><span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:17px">Ask Kip</span><span style="font-size:11.5px;color:var(--muted)">{{ kipStatus }}</span></div>
         <span style="flex:1"></span>
         <button onClick="{{ howKip }}" style="height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);font-size:11.5px;font-weight:600;cursor:pointer">How it works</button>
         <button onClick="{{ closeDrawer }}" title="Close" style="width:30px;height:30px;border:0;border-radius:50%;background:var(--surface2);color:var(--ink);font-size:17px;cursor:pointer">×</button>
@@ -496,6 +498,9 @@ input,button,select,textarea{font-family:inherit}
           <sc-if value="{{ msg.isKip }}" hint-placeholder-val="{{ true }}">
             <div style="align-self:flex-start;max-width:88%;display:flex;flex-direction:column;gap:6px">
               <div style="padding:10px 13px;border-radius:16px 16px 16px 4px;background:var(--surface2);border:1px solid var(--line);font-size:13.5px;line-height:1.48;white-space:pre-wrap">{{ msg.text }}</div>
+              <sc-if value="{{ msg.hasAction }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ msg.onAction }}" style="align-self:flex-start;height:32px;padding:0 12px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">{{ msg.actionLabel }}</button>
+              </sc-if>
               <sc-if value="{{ msg.hasTrace }}" hint-placeholder-val="{{ false }}">
                 <button onClick="{{ msg.toggle }}" style="align-self:flex-start;border:0;background:transparent;color:var(--muted);font-size:11.5px;font-weight:600;cursor:pointer;padding:0 4px">How this answer was made ›</button>
                 <sc-if value="{{ msg.open }}" hint-placeholder-val="{{ false }}">
@@ -654,9 +659,10 @@ input,button,select,textarea{font-family:inherit}
   </sc-if>
 
   <sc-if value="{{ tip.show }}" hint-placeholder-val="{{ false }}">
-    <div style="position:fixed;left:{{ tip.x }}px;top:{{ tip.y }}px;transform:{{ tip.tr }};width:260px;padding:11px 13px;border-radius:14px;background:var(--ink);color:var(--bg);box-shadow:var(--shadow);pointer-events:none;z-index:90;animation:koinPop .18s ease">
+    <div onMouseEnter="{{ tipEnter }}" onMouseLeave="{{ tipLeave }}" style="position:fixed;left:{{ tip.x }}px;top:{{ tip.y }}px;transform:{{ tip.tr }};width:260px;padding:11px 13px;border-radius:14px;background:var(--ink);color:var(--bg);box-shadow:var(--shadow);z-index:90;animation:koinPop .18s ease">
       <div style="font-size:12.5px;font-weight:700;margin-bottom:3px">{{ tip.title }}</div>
       <div style="font-size:12px;line-height:1.45;opacity:.85">{{ tip.def }}</div>
+      <button onClick="{{ followTip }}" onFocus="{{ tipEnter }}" style="margin-top:9px;height:28px;padding:0 11px;border:0;border-radius:9px;background:var(--accent);color:#fff;font-size:12px;font-weight:700;cursor:pointer">Follow up with Kip →</button>
     </div>
   </sc-if>
 
