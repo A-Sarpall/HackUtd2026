@@ -115,3 +115,30 @@ The Claude Design handoff "Koin Pond" is now the main page at `/`. It renames th
   - `npm test`: 26 of 26 pass. The home-page test now checks Koin, `/classic`, and that unlisted paths are refused.
   - Headless Chrome at 1440×900 and 1024×700 against a keyless server with the production CSP and `PUBLIC_ORIGIN` set: no runtime errors, 14 animations active at load (the remaining ones are interaction-triggered), and fonts loaded.
   - Exercised the payment review, safer-date suggestion, habit slider, dark mode, Kip chat with its trace and loader, goal added from chat, goal cards, receipts, and Data & goals.
+
+## Koin: Nessie sandbox data source (November 8, 2026)
+
+The Data source dropdown in Koin's Data & goals is now real. It lists sandbox customers from `GET /api/v1/customers` and loads one through `POST /api/v1/sync`. Choosing the demo customer switches back. No backend or API contract changes.
+
+- **Taken from the sandbox:** checking, savings, what's owed (cards and active loans), bills due in the next 30 days on their real dates, the safety cushion, and today's date. These show as read-only in Data & goals.
+- **Not in sandbox data, so treated as unknown rather than invented:**
+  - **Take-home pay:** without it, no income is counted and budget checks are skipped, and a finding says so. Pay the user enters is spread evenly across the month, because pay dates aren't known.
+  - **APR, and the minimum payment when there are credit cards:** the debt-free date shows "Unknown" until they are entered. Loan minimums are used when there are no cards.
+  - **Habits:** they start at $0, for the user to estimate.
+  - **Balance history:** the Last 10 days section stays flat at today's balance, because sandbox transactions don't identify the account.
+- **Other behavior:**
+  - The badge reads NESSIE SANDBOX, and "As of", "Today" and "A year from now" follow the snapshot date.
+  - Payment date choices become Today, Next week and In 2 weeks.
+  - Kip's answers use the sandbox figures.
+  - Loading a customer adds a "Data source" receipt.
+- **States handled:**
+  - Customers loading.
+  - No key on the server: "Sandbox customers aren't connected on this server."
+  - Rate limits and provider errors.
+  - A customer with no accounts: the current data stays unchanged.
+- **Verification:**
+  - Ran against a local mock Nessie API (no live provider calls) with one customer that has checking, savings, a card, a loan, bills inside and outside the 30-day window, and transactions, plus one customer with no accounts.
+  - Also ran against a server with no key.
+  - The demo flows were re-checked, and `npm test` passes 26 of 26.
+- **Not verified:** the live Nessie API.
+- **Still client-side:** Koin's math still runs in the browser in dollars, as noted above.

@@ -1,7 +1,7 @@
 /* Koin shared prototype model: demo data, finance math, goals, Kip mascot, view builder. */
 (function () {
 'use strict';
-const TODAY = '2026-11-07';
+let TODAY = '2026-11-07'; // set from the active data source on every render
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const D = s => new Date(s + 'T12:00:00Z');
 const iso = d => d.toISOString().slice(0, 10);
@@ -19,7 +19,7 @@ const T = n => 'var(--' + n + ')';
 
 const LEVERS = [
   { id: 'dining', label: 'Dining out', base: 280, min: 0, max: 500, step: 10, kind: 'spend' },
-  { id: 'groceries', label: 'Groceries', base: 360, min: 150, max: 600, step: 10, kind: 'spend' },
+  { id: 'groceries', label: 'Groceries', base: 360, min: 0, max: 600, step: 10, kind: 'spend' },
   { id: 'coffee', label: 'Coffee', base: 72, min: 0, max: 150, step: 2, kind: 'spend' },
   { id: 'rides', label: 'Rideshare & gas', base: 140, min: 0, max: 300, step: 5, kind: 'spend' },
   { id: 'shopping', label: 'Shopping', base: 210, min: 0, max: 500, step: 10, kind: 'spend' },
@@ -52,10 +52,38 @@ const PAY_DATES = [
   { date: '2026-11-14', label: 'Payday', sub: 'Nov 14' },
   { date: '2026-11-15', label: 'Day after', sub: 'Nov 15' },
 ];
+/* The active data source. 'demo' is the design's made-up customer; 'nessie' is a sandbox customer loaded through /api/v1/sync. */
+const DEMO_SRC = { kind: 'demo', today: '2026-11-07', label: 'Alex Rivera · made-up demo customer', badge: 'DEMO DATA', paydaysText: 'Nov 14 and Nov 28' };
+let SRC = DEMO_SRC;
+const NESSIE_BASE = Object.fromEntries(LEVERS.map(l => [l.id, l.id === 'goal' ? l.base : 0]));
+const srcBase = () => SRC.kind === 'demo' ? BASE : NESSIE_BASE;
+function payDates() {
+  if (SRC.kind === 'demo') return PAY_DATES;
+  return [[0, 'Today'], [7, 'Next week'], [14, 'In 2 weeks']].map(([n, label]) => { const date = addDays(TODAY, n); return { date, label, sub: fDay(date) }; });
+}
+const nextDom = n => { const d = D(TODAY); if (d.getUTCDate() > n) d.setUTCMonth(d.getUTCMonth() + 1); d.setUTCDate(n); return iso(d); };
+const neverOr = unknown => unknown ? 'Unknown' : 'Never';
+/* Turn a /api/v1/sync snapshot (integer cents) into the Koin source and profile. Unknown stays null. */
+function fromSnapshot(snap, customer) {
+  const c = v => v == null ? null : v / 100;
+  const asOf = snap.asOf;
+  const bills = (snap.events || []).filter(e => e.origin === 'nessie' && e.cents < 0).map(e => ({ date: e.date, label: e.label || 'Bill', amt: e.cents / 100 }));
+  // Sandbox transactions don't say which account they hit, so past checking balances can't be rebuilt honestly: history stays flat at today's balance.
+  const past = [];
+  const loanPays = (snap.loans || []).map(l => l.monthlyPaymentCents);
+  const cards = (snap.accounts || []).filter(a => a.type === 'Credit Card' && a.balanceCents > 0).length;
+  const src = { kind: 'nessie', today: asOf, label: customer.label + ' · Nessie sandbox', customerId: customer.id, badge: 'NESSIE SANDBOX', paydaysText: 'not in sandbox data', bills, billsMonthly: -bills.reduce((a, b) => a + b.amt, 0), past,
+    accounts: (snap.provider || {}).accounts || (snap.accounts || []).length };
+  const P = { checking: c(snap.openingCents), savings: c(snap.savingsCents) || 0, owe: c(snap.liabilitiesCents) || 0, apr: null,
+    minPay: !cards && loanPays.length && loanPays.every(Number.isSafeInteger) ? loanPays.reduce((a, b) => a + b, 0) / 100 : null,
+    income: null, rent: 0, utilities: 0, cushion: c(snap.cashFloorCents) || 0, goalName: 'Emergency fund', goalTarget: 3000, debtName: 'Cards & loans' };
+  return { src, P };
+}
 const PAST = [{ date: '2026-10-31', label: 'Payday', amt: 1500 }, { date: '2026-11-03', label: 'Subscriptions', amt: -64 }, { date: '2026-11-04', label: 'Car repair', amt: -412 }];
 const amort = (P, apr, n) => { const r = apr / 1200; return r === 0 ? P / n : P * r / (1 - Math.pow(1 + r, -n)); };
 
 function payoff(owe, apr, pay) {
+  if (owe > 0.005 && (apr == null || pay == null)) return { months: null, interest: null, unknown: true };
   const r = apr / 1200; let b = owe, k = 0, int = 0;
   if (b <= 0.005) return { months: 0, interest: 0 };
   while (b > 0.005 && k < 720) { const i = b * r; if (pay <= i + 0.005) return { months: null, interest: null }; int += i; b = b + i - pay; k++; }
@@ -64,16 +92,16 @@ function payoff(owe, apr, pay) {
 function resolveGoals(goals, P) {
   return goals.map(g => {
     if (g.id === 'emergency') return Object.assign({}, g, { name: P.goalName, target: P.goalTarget, saved: P.savings });
-    if (g.id === 'card') return Object.assign({}, g, { name: 'Credit card', balance: P.owe, apr: P.apr, minPay: P.minPay });
+    if (g.id === 'card') return Object.assign({}, g, { name: P.debtName || 'Credit card', balance: P.owe, apr: P.apr, minPay: P.minPay });
     return g;
   });
 }
-const goalMonthly = (g, lv, usePlan) => g.id === 'emergency' ? lv.goal : g.id === 'card' ? g.minPay + lv.extraDebt : usePlan ? g.planMonthly : g.monthly;
+const goalMonthly = (g, lv, usePlan) => g.id === 'emergency' ? lv.goal : g.id === 'card' ? (g.minPay || 0) + lv.extraDebt : usePlan ? g.planMonthly : g.monthly;
 
 function history(P, lv) {
-  const spend = DISC.reduce((a, k) => a + BASE[k], 0) / 30; const out = []; let cur = P.checking;
+  const B = srcBase(); const spend = DISC.reduce((a, k) => a + B[k], 0) / 30; const out = []; let cur = P.checking; const past = SRC.kind === 'demo' ? PAST : SRC.past;
   for (let i = 1; i <= 10; i++) {
-    const date = addDays(TODAY, -i); const ev = PAST.filter(p => p.date === date).map(p => p.label === 'Subscriptions' ? Object.assign({}, p, { amt: -(lv ? lv.subs : BASE.subs) }) : p).filter(p => Math.abs(p.amt) >= 0.5);
+    const date = addDays(TODAY, -i); const ev = past.filter(p => p.date === date).map(p => SRC.kind === 'demo' && p.label === 'Subscriptions' ? Object.assign({}, p, { amt: -(lv ? lv.subs : B.subs) }) : p).filter(p => Math.abs(p.amt) >= 0.5);
     out.unshift({ date, bal: cur, low: cur, ev: ev.map(e => ({ k: e.amt > 0 ? 'pay' : 'bill', label: e.label, amt: e.amt })) });
     cur = cur + spend - ev.reduce((a, e) => a + e.amt, 0);
   }
@@ -86,8 +114,8 @@ function goalResults(gs, extras) {
     if (g.kind === 'save') { const rem = g.target - g.saved; const months = rem <= 0 ? 0 : x.m > 0 ? rem / x.m : null;
       return { id: g.id, months, date: months === null ? null : addDays(TODAY, Math.round(months * 30)), interest: 0 }; }
     const owe = Math.max(0, g.balance - (g.id === 'card' ? extras.reduce((a, e) => a + e.amount, 0) : 0));
-    const po = payoff(owe, g.apr, x.m);
-    return { id: g.id, months: po.months, date: po.months === null ? null : po.months === 0 ? TODAY : addMonths('2026-11-20', po.months - 1), interest: po.interest, owe };
+    const po = payoff(owe, g.apr, g.id === 'card' && g.minPay == null ? null : x.m);
+    return { id: g.id, months: po.months, date: po.months === null ? null : po.months === 0 ? TODAY : addMonths(nextDom(20), po.months - 1), interest: po.interest, owe, unknown: !!po.unknown };
   });
 }
 
@@ -95,7 +123,8 @@ function compute(lv, P, goalsIn, route, extras, usePlan, horizonMonths) {
   extras = extras || [];
   const goals = resolveGoals(goalsIn, P);
   const disc = DISC.reduce((a, k) => a + lv[k], 0);
-  const freed = DISC.reduce((a, k) => a + BASE[k] - lv[k], 0) + (BASE.subs - lv.subs) + lv.side;
+  const B = srcBase(); const freed = DISC.reduce((a, k) => a + B[k] - lv[k], 0) + (B.subs - lv.subs) + lv.side;
+  const demo = SRC.kind === 'demo', budgetKnown = P.income != null, inc = P.income || 0, bills = demo ? 0 : SRC.billsMonthly;
   const pos = Math.max(0, freed);
   const gs = goals.map(g => { const mb = Math.max(0, goalMonthly(g, lv, usePlan)); return { g, mBase: mb, m: mb + (route === g.id ? pos : 0), bal: g.kind === 'payoff' ? g.balance : 0, saved: g.kind === 'save' ? g.saved : 0 }; });
   const hasMortgage = goals.some(g => g.type === 'mortgage');
@@ -104,8 +133,9 @@ function compute(lv, P, goalsIn, route, extras, usePlan, horizonMonths) {
   let bal = P.checking; const days = [];
   for (let i = 0; i < 30; i++) {
     const date = addDays(TODAY, i), dom = D(date).getUTCDate(); const ev = [];
-    if (dom === 10 && rent > 0) ev.push({ k: 'bill', label: 'Rent', amt: -rent });
-    if (dom === 11) ev.push({ k: 'bill', label: 'Utilities', amt: -P.utilities });
+    if (demo && dom === 10 && rent > 0) ev.push({ k: 'bill', label: 'Rent', amt: -rent });
+    if (demo && dom === 11) ev.push({ k: 'bill', label: 'Utilities', amt: -P.utilities });
+    if (!demo) SRC.bills.forEach(b => { if (b.date === date) ev.push({ k: 'bill', label: b.label, amt: b.amt }); });
     if (dom === 3 && lv.subs > 0) ev.push({ k: 'bill', label: 'Subscriptions', amt: -lv.subs });
     if (dom === 15) gs.forEach(x => { if (x.g.kind === 'save' && x.mBase > 0 && x.saved < x.g.target) { const c = Math.min(x.mBase, x.g.target - x.saved); x.saved += c; ev.push({ k: 'goal', label: 'To ' + x.g.name.toLowerCase(), amt: -c }); } });
     if (dom === 20) gs.forEach(x => { if (x.g.kind === 'payoff' && x.bal > 0.005 && x.mBase > 0) { const it = x.bal * x.g.apr / 1200; const p = Math.min(x.mBase, x.bal + it); x.bal = x.bal + it - p; ev.push({ k: 'debt', label: x.g.name + ' payment', amt: -p }); } });
@@ -113,8 +143,9 @@ function compute(lv, P, goalsIn, route, extras, usePlan, horizonMonths) {
     const outs = ev.filter(e => e.amt < 0).reduce((a, e) => a + e.amt, 0);
     bal += -disc / 30 + outs;
     const low = bal;
-    if (dom === 14 || dom === 28) ev.push({ k: 'pay', label: 'Payday', amt: P.income / 2 });
-    bal += lv.side / 30 + (dom === 14 || dom === 28 ? P.income / 2 : 0);
+    // Demo paydays are listed; sandbox data has no pay dates, so entered pay is spread evenly across the month.
+    if (demo && (dom === 14 || dom === 28)) ev.push({ k: 'pay', label: 'Payday', amt: inc / 2 });
+    bal += lv.side / 30 + (demo ? (dom === 14 || dom === 28 ? inc / 2 : 0) : inc / 30);
     days.push({ date, bal, low, ev });
   }
   let lowest = Infinity, li = 0; days.forEach((d, i) => { if (d.low < lowest) { lowest = d.low; li = i; } });
@@ -122,7 +153,7 @@ function compute(lv, P, goalsIn, route, extras, usePlan, horizonMonths) {
   const d29 = days[29].date; const nw29 = nwOf(bal);
   const months = []; const H = horizonMonths || 11;
   for (let m = 1; m <= H; m++) {
-    bal += P.income + lv.side - rent - P.utilities - lv.subs - disc;
+    bal += inc + lv.side - rent - P.utilities - bills - lv.subs - disc;
     gs.forEach(x => {
       if (x.g.kind === 'save' && x.m > 0 && x.saved < x.g.target) { const c = Math.min(x.m, x.g.target - x.saved); x.saved += c; bal -= c; }
       if (x.g.kind === 'payoff' && x.bal > 0.005 && x.m > 0) { const it = x.bal * x.g.apr / 1200; const p = Math.min(x.m, x.bal + it); x.bal = x.bal + it - p; bal -= p; }
@@ -132,9 +163,9 @@ function compute(lv, P, goalsIn, route, extras, usePlan, horizonMonths) {
   const gs0 = goals.map(g => ({ g, m: Math.max(0, goalMonthly(g, lv, usePlan)) + (route === g.id ? pos : 0) }));
   const res = goalResults(gs0, extras);
   const goalMap = Object.fromEntries(res.map(r => [r.id, r]));
-  const essentials = rent + P.utilities;
+  const essentials = rent + P.utilities + bills;
   const committed = gs0.reduce((a, x) => a + x.m, 0);
-  const leftover = P.income + lv.side - essentials - lv.subs - disc - committed;
+  const leftover = inc + lv.side - essentials - lv.subs - disc - committed; const lk = budgetKnown ? leftover : 0;
   const emerg = gs0.find(x => x.g.id === 'emergency');
   const em = goalMap.emergency || { months: null, date: null }, cd = goalMap.card || { months: null, date: null, interest: null, owe: 0 };
   const savings = goals.filter(g => g.kind === 'save').reduce((a, g) => a + g.saved, 0);
@@ -144,11 +175,11 @@ function compute(lv, P, goalsIn, route, extras, usePlan, horizonMonths) {
   const debtFree = payoffs.some(r => r.months === null) ? null : payoffs.reduce((a, r) => r.date && (!a || r.date > a) ? r.date : a, null);
   const debtFreeMonths = payoffs.some(r => r.months === null) ? null : Math.max.apply(null, payoffs.map(r => r.months).concat([0]));
   const m12 = months[Math.min(10, months.length - 1)];
-  let mood = lowest < 0 || leftover < -50 ? 'panic' : gap < 0 ? 'worried' : gap < 100 || leftover < 0 ? 'nervous' : 'happy';
-  if (mood === 'happy' && ((em.months !== null && em.months <= 6 && cd.months !== null && cd.months <= 24) || (gap >= 400 && leftover >= 600))) mood = 'thriving';
+  let mood = lowest < 0 || lk < -50 ? 'panic' : gap < 0 ? 'worried' : gap < 100 || lk < 0 ? 'nervous' : 'happy';
+  if (mood === 'happy' && ((em.months !== null && em.months <= 6 && cd.months !== null && cd.months <= 24) || (gap >= 400 && lk >= 600))) mood = 'thriving';
   return { goals, gs: gs0, res, goalMap, disc, freed, effGoal: emerg ? emerg.m : 0, effExtra: card ? (gs0.find(x => x.g.id === 'card').m - P.minPay) : 0, days, lowest, lowestDate: days[li].date, li, gap, months, nw29,
     owe: cd.owe || 0, debtMonths: cd.months, interest: cd.interest, debtDate: cd.date, goalMonths: em.months, goalDate: em.date, leftover, essentials, rent, hasMortgage, debtFree, debtFreeMonths,
-    nwNow: P.checking + savings - debts, nw12: m12.nw, sav12: m12.sav, cov: P.savings / essentials, cov12: (P.savings + Math.min(P.goalTarget - P.savings, (emerg ? emerg.m : 0) * 11.5)) / essentials, mood };
+    nwNow: P.checking + savings - debts, nw12: m12.nw, sav12: m12.sav, cov: essentials > 0 ? P.savings / essentials : null, budgetKnown, debtUnknown: res.some(r => r.unknown), cov12: (P.savings + Math.min(P.goalTarget - P.savings, (emerg ? emerg.m : 0) * 11.5)) / (essentials || Infinity), mood };
 }
 function horizonFor(results) {
   let mx = 0; results.forEach(r => r.res.forEach(x => { if (x.months !== null && x.months > mx) mx = x.months; }));
@@ -246,7 +277,7 @@ const GLOSSARY = {
 const STEP_TONE = { AI: ['ai-bg', 'ai-fg'], CODE: ['code-bg', 'code-fg'], DATA: ['data-bg', 'data-fg'], YOU: ['you-bg', 'you-fg'] };
 const HOW = {
   stand: { title: 'Where do these numbers come from?', intro: 'Every figure is calculated in code from your account data and your own inputs.', steps: [
-    ['DATA', 'Account data', 'Checking, savings, your card balance and bills from a made-up demo customer.'],
+    ['DATA', 'Account data', 'Checking, savings, what you owe and upcoming bills from the selected source: the made-up demo customer or a Nessie sandbox customer.'],
     ['CODE', 'Cleanup', 'Transfers between your own accounts are removed and refunds offset spending.'],
     ['YOU', 'Your inputs', 'Take-home pay, essential bills, safety cushion and goals from Setup or Kip.'],
     ['CODE', 'Financial engine', 'Net worth, emergency coverage and the outlook are math, never AI guesses.']], note: 'Demo data: only the listed bills, paydays, habits and goals are included.' },
@@ -322,7 +353,7 @@ function parseGoal(text) {
   const nums = [...t.matchAll(/\$?\s?(\d+(?:\.\d+)?)\s*(k|thousand)?(?![\d.]*\s*%)/g)].map(m => +m[1] * (m[2] ? 1000 : 1)).filter(n => n !== monthly && n !== +apr && !(n >= 2026 && n <= 2060));
   const amount = nums.length ? Math.max.apply(null, nums) : null;
   let deadline = null; const dm = t.match(/by\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*(\d{4})?/);
-  if (dm) { const mi = MON.findIndex(x => x.toLowerCase() === dm[1]); let y = dm[2] ? +dm[2] : 2026; let dt = y + '-' + String(mi + 1).padStart(2, '0') + '-01'; if (dt <= TODAY) dt = (y + 1) + dt.slice(4); deadline = dt; }
+  if (dm) { const mi = MON.findIndex(x => x.toLowerCase() === dm[1]); let y = dm[2] ? +dm[2] : D(TODAY).getUTCFullYear(); let dt = y + '-' + String(mi + 1).padStart(2, '0') + '-01'; if (dt <= TODAY) dt = (y + 1) + dt.slice(4); deadline = dt; }
   const inm = t.match(/in\s+(\d+)\s+months?/); if (!deadline && inm) deadline = addMonths(TODAY, +inm[1]);
   const kind = type ? TYPES[type].kind : (/pay off|payoff|loan|debt/.test(t) ? 'payoff' : 'save');
   return { type: type || (kind === 'payoff' ? 'other_debt' : 'other_save'), kind, amount, apr: apr ? +apr : null, monthly, deadline };
@@ -330,13 +361,13 @@ function parseGoal(text) {
 
 function moodLine(sim, P) {
   const d = fDay(sim.lowestDate), g = money(sim.gap);
-  if (sim.leftover < 0 && sim.lowest >= 0) return 'Your plan spends ' + money(-sim.leftover) + ' more than comes in each month. The stream drains over time. Let’s trim something.';
+  if (sim.budgetKnown && sim.leftover < 0 && sim.lowest >= 0) return 'Your plan spends ' + money(-sim.leftover) + ' more than comes in each month. The stream drains over time. Let’s trim something.';
   return {
     panic: 'Uh-oh. Checking goes below zero on ' + d + '. Let’s undo something splashy.',
     worried: 'We dip under your safety cushion on ' + d + '. I’d hold off on big moves until payday.',
     nervous: 'Water gets shallow around ' + d + ': just ' + g + ' above your cushion. Payday’s right after, hang in there.',
     happy: 'Smooth swimming. Your lowest point stays ' + g + ' above your cushion.',
-    thriving: 'Look at us go! Deep water all month: your lowest point stays ' + g + ' above your cushion' + (sim.leftover > 0 ? ', with ' + money(sim.leftover) + ' a month to spare.' : '.'),
+    thriving: 'Look at us go! Deep water all month: your lowest point stays ' + g + ' above your cushion' + (sim.budgetKnown && sim.leftover > 0 ? ', with ' + money(sim.leftover) + ' a month to spare.' : '.'),
   }[sim.mood];
 }
 function kipSays(s, sim, plan, P) {
@@ -364,7 +395,7 @@ function durDelta(a, b) {
   return { text: fmtDur(Math.abs(a - b)) + ' ' + (b < a ? 'sooner' : 'later'), tone: b < a ? 'good' : 'bad', show: true };
 }
 function moneyDelta(a, b) { const d = Math.round(b - a); return { text: d === 0 ? 'no change' : smoney(d), tone: d === 0 ? 'muted' : d > 0 ? 'good' : 'bad', show: d !== 0 }; }
-function nowStamp() { const d = new Date(); let h = d.getHours(); const m = String(d.getMinutes()).padStart(2, '0'); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return 'Nov 7 · ' + h + ':' + m + ' ' + ap; }
+function nowStamp() { const d = new Date(); let h = d.getHours(); const m = String(d.getMinutes()).padStart(2, '0'); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return fDay(TODAY) + ' · ' + h + ':' + m + ' ' + ap; }
 function stepRows(list, active) {
   return list.map((x, i) => { const [bg, fg] = STEP_TONE[x[1]]; const state = x[3] ? 'skipped' : active === undefined ? 'done' : i < active ? 'done' : i === active ? 'running' : 'waiting';
     return { role: x[0], kind: x[1], text: x[2], kBg: T(bg), kFg: T(fg), state, stateLabel: { done: 'Done', skipped: 'Skipped', running: 'Working…', waiting: '' }[state], op: state === 'waiting' ? .35 : state === 'skipped' ? .5 : 1, dot: state === 'running' ? T('accent') : state === 'waiting' ? T('line') : T('good'), n: i + 1, last: i === list.length - 1 }; });
@@ -373,7 +404,7 @@ function stepRows(list, active) {
 /* ---------- handlers ---------- */
 const DEF = { theme: 'light', lv: BASE, plan: BASE, route: 'cash', P: PROFILE, goals: GOALS0, planned: [], pay: { amount: '300', dateIdx: 0, phase: 'idle', step: 0 }, payHover: false,
   goalRev: { id: null, phase: 'idle', step: 0 }, lockRev: { phase: 'idle', step: 0 }, hover: null, scrollX: 0, lastLever: null, ripple: 0, drawer: null, setup: false, how: null, tip: null, goalText: '',
-  receipts: SEED_RECEIPTS, openRec: null, chat: [{ role: 'kip', text: 'Hey! I’m Kip, your money sidekick. Ask me anything, or tell me a goal like “pay off my student loans” and I’ll add it to your stream.' }], chatInput: '', chatBusy: false, chatStep: 0, traceOpen: -1, toast: null };
+  receipts: SEED_RECEIPTS, openRec: null, chat: [{ role: 'kip', text: 'Hey! I’m Kip, your money sidekick. Ask me anything, or tell me a goal like “pay off my student loans” and I’ll add it to your stream.' }], chatInput: '', chatBusy: false, chatStep: 0, traceOpen: -1, toast: null, src: DEMO_SRC, srcState: { status: 'idle', customers: [], message: '' } };
 
 function handlers(c) {
   if (c._h) return c._h;
@@ -400,13 +431,13 @@ function handlers(c) {
     const before = compute(s.lv, s.P, s.goals, s.route, ex, false), after = compute(s.lv, P, goals, s.route, ex, false);
     const r = after.goalMap[gid]; const gg = after.goals.find(x => x.id === gid);
     set(Object.assign({ goals, P, lastLever: 'goal:' + gid, ripple: s.ripple + 1 }, idle));
-    const ok = after.leftover >= 0 && after.lowest >= P.cushion;
+    const ok = (!after.budgetKnown || after.leftover >= 0) && after.lowest >= P.cushion;
     H.addReceipt({ title: 'Goal added · ' + gg.name + ' ' + money(gg.kind === 'save' ? gg.target : gg.balance), verdict: ok ? 'Added' : 'Added · over budget', tone: ok ? 'good' : 'warn', kind: 'Goal from Kip',
       facts: [['Monthly toward it', '—', money(goalMonthly(gg, s.lv))], [gg.kind === 'save' ? 'Reached in' : 'Paid off in', '—', r.months === null ? 'Never' : fmtDur(r.months)], ['Unassigned each month', money(before.leftover), money(after.leftover)], ['Lowest balance ahead', money(before.lowest), money(after.lowest)]],
-      checks: [['Fits your monthly budget', after.leftover >= 0], ['Stays above safety cushion', after.lowest >= P.cushion], ['Uses verified figures only', true]],
+      checks: [['Fits your monthly budget', !after.budgetKnown || after.leftover >= 0], ['Stays above safety cushion', after.lowest >= P.cushion], ['Uses verified figures only', true]],
       steps: [live ? ['Coordinator', 'AI', 'Read the goal from your message.'] : ['Coordinator', 'AI', 'Skipped: goal read by keyword rules', true], ['Financial engine', 'CODE', 'Added it to the stream and recalculated.'], ['Verifier', 'CODE', ok ? 'Fits your budget and cushion.' : 'Over budget: flagged for you.'], live ? ['Coach', 'AI', 'Confirmed it with verified figures.'] : ['Coach', 'AI', AI_OFF, true]], note: 'Goals are plans in Koin. No money moved.' });
     return { ok: true, goal: gg.name, type: gg.type, kind: gg.kind, amount: gg.kind === 'save' ? gg.target : gg.balance, apr: gg.apr || null, monthlyPayment: Math.round(goalMonthly(gg, s.lv)), reachedOrPaidOffIn: r.months === null ? 'never at this monthly amount' : fmtDur(r.months), date: r.date ? fMonth(r.date) : null,
-      totalInterest: r.interest ? Math.round(r.interest) : null, unassignedPerMonthBefore: Math.round(before.leftover), unassignedPerMonthAfter: Math.round(after.leftover), lowestBalanceAfter: Math.round(after.lowest), safetyCushion: P.cushion, overBudget: !ok, replacedRent: gg.type === 'mortgage' ? P.rent : 0 };
+      totalInterest: r.interest ? Math.round(r.interest) : null, unassignedPerMonthBefore: Math.round(before.leftover), unassignedPerMonthAfter: after.budgetKnown ? Math.round(after.leftover) : null, lowestBalanceAfter: Math.round(after.lowest), safetyCushion: P.cushion, overBudget: !ok, replacedRent: gg.type === 'mortgage' ? P.rent : 0 };
   };
   H.removeGoalByName = name => { const s = S(); const n = String(name || '').toLowerCase(); const g = s.goals.find(x => !x.fixed && (x.name || '').toLowerCase().indexOf(n) >= 0 || (!x.fixed && n.indexOf((x.name || '').toLowerCase()) >= 0)); if (!g) return { ok: false, error: 'No matching goal you added.' }; H.removeGoal(g.id)(); return { ok: true, removed: g.name }; };
   H.toggleTheme = () => set({ theme: S().theme === 'dark' ? 'light' : 'dark' });
@@ -428,7 +459,7 @@ function handlers(c) {
   H.payEnter = () => set({ payHover: true }); H.payLeave = () => set({ payHover: false });
   H.payReview = () => { if (!(+S().pay.amount > 0)) return; runSteps('pay', 4); };
   H.paySafer = () => { const r = c._payResult; if (!r || !r.safer) return; set({ pay: Object.assign({}, S().pay, r.safer.patch, { phase: 'idle' }) }); setTimeout(() => runSteps('pay', 4), 30); };
-  H.payApprove = () => { const s = S(), r = c._payResult; if (!r || !r.ok) return; const item = { id: 'p' + Date.now(), amount: +s.pay.amount, date: PAY_DATES[s.pay.dateIdx].date };
+  H.payApprove = () => { const s = S(), r = c._payResult; if (!r || !r.ok) return; const item = { id: 'p' + Date.now(), amount: +s.pay.amount, date: payDates()[s.pay.dateIdx].date };
     set({ planned: s.planned.concat([item]), pay: { amount: '', dateIdx: 2, phase: 'idle', step: 0 } });
     H.addReceipt({ title: 'Extra payment · ' + money(item.amount) + ' on ' + fDay(item.date), verdict: 'Approved', tone: 'good', kind: 'Payment review', facts: r.facts, checks: [['Stays above safety cushion', true], ['Uses verified figures only', true], ['Approved once by you', true]], steps: r.stepsRaw, note: 'Added to your Koin plan. No money moved.' });
     H.toast('Added to your plan. Koin never moves money, you make the payment.'); };
@@ -453,8 +484,43 @@ function handlers(c) {
   H.closeDrawer = () => set({ drawer: null });
   H.openRec = id => memo('or' + id, () => set({ openRec: id }));
   H.closeRec = () => set({ openRec: null });
-  H.openSetup = () => set({ setup: true }); H.closeSetup = () => set({ setup: false });
-  H.prof = k => memo('pf' + k, e => { const raw = e.target.value; const v = k === 'goalName' ? raw : Math.max(0, +(raw.replace(/[^0-9.]/g, '')) || 0); set({ P: Object.assign({}, S().P, { [k]: v }) }); });
+  /* ---- data source: demo or a Nessie sandbox customer via the NextMove API ---- */
+  const api = async (method, path, body) => {
+    const r = await fetch('/api/v1' + path, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    let data = {}; try { data = await r.json(); } catch (e) { data = {}; }
+    return { ok: r.ok, status: r.status, data };
+  };
+  const SRC_ERR = { NESSIE_KEY_MISSING: 'Sandbox customers aren’t connected on this server.', RATE_LIMITED: 'Too many requests. Wait a minute and try again.' };
+  const errText = d => { const e = (d && d.error) || {}; return SRC_ERR[e.code] || e.message || 'Sandbox data isn’t available right now. Try again in a moment.'; };
+  const setSrcState = p => c.setState(st => ({ srcState: Object.assign({}, (st.srcState || DEF.srcState), p) }));
+  H.loadCustomers = async () => {
+    setSrcState({ status: 'loading', message: '' });
+    try {
+      if (!c._session) { const r = await api('POST', '/demo-session', {}); if (!r.ok) throw r; c._session = true; }
+      const r = await api('GET', '/customers'); if (!r.ok) throw r;
+      const list = r.data.customers || [];
+      setSrcState({ status: 'ready', customers: list, message: list.length ? '' : 'The sandbox has no customers yet.' });
+    } catch (r) { setSrcState({ status: 'error', customers: [], message: errText(r && r.data) }); }
+  };
+  const resetFor = (src, P, base) => ({ src, P, lv: base, plan: base, goals: GOALS0, planned: [], route: 'cash', lastLever: null, hover: null, ripple: (S().ripple || 0) + 1,
+    pay: { amount: '300', dateIdx: 0, phase: 'idle', step: 0 }, goalRev: { id: null, phase: 'idle', step: 0 }, lockRev: { phase: 'idle', step: 0 } });
+  H.chooseSource = async e => {
+    const id = e.target.value;
+    if (id === 'demo') { set(resetFor(DEMO_SRC, PROFILE, BASE)); setSrcState({ message: '' }); H.toast('Switched to the made-up demo customer.'); return; }
+    const customer = (S().srcState.customers || []).find(x => x.id === id); if (!customer) return;
+    setSrcState({ status: 'syncing', message: 'Loading ' + customer.label + '…' });
+    try {
+      const r = await api('POST', '/sync', { customerId: id }); if (!r.ok) throw r;
+      if (r.data.empty || !r.data.snapshot) { setSrcState({ status: 'ready', message: r.data.message || 'This sandbox customer has no accounts. Nothing changed.' }); return; }
+      const { src, P } = fromSnapshot(r.data.snapshot, customer);
+      set(resetFor(src, P, NESSIE_BASE));
+      setSrcState({ status: 'ready', message: 'Loaded ' + src.accounts + ' sandbox account' + (src.accounts === 1 ? '' : 's') + '. Add your take-home pay and any missing details below.' });
+      H.addReceipt({ title: 'Data source · ' + src.label, verdict: 'Loaded', tone: 'info', kind: 'Data source', facts: [['Checking today', '—', money(P.checking)], ['Savings', '—', money(P.savings)], ['Owed', '—', money(P.owe)], ['Bills in next 30 days', '—', money(src.billsMonthly)]],
+        checks: [['Read-only sandbox data', true], ['Take-home pay included', false], ['APR included', false]], steps: [['Account data', 'DATA', 'Read accounts, bills, loans and transactions from the Nessie sandbox.'], ['Cleanup', 'CODE', 'Removed transfers between this customer’s own accounts.']], note: 'Nessie is test data, not a real bank. No money moved.' });
+    } catch (r) { setSrcState({ status: 'error', message: errText(r && r.data) }); }
+  };
+  H.openSetup = () => { set({ setup: true }); if (S().srcState.status === 'idle') H.loadCustomers(); }; H.closeSetup = () => set({ setup: false });
+  H.prof = k => memo('pf' + k, e => { const raw = e.target.value; const num = raw.replace(/[^0-9.]/g, ''); const v = k === 'goalName' ? raw : ['income', 'apr', 'minPay'].includes(k) && num === '' ? null : Math.max(0, +num || 0); set({ P: Object.assign({}, S().P, { [k]: v }) }); });
   H.how = k => memo('hw' + k, () => set({ how: k }));
   H.closeHow = () => set({ how: null });
   H.stop = e => e.stopPropagation();
@@ -489,20 +555,20 @@ function handlers(c) {
           saved: { type: 'number', description: 'Already saved toward it, if mentioned' },
           apr: { type: 'number', description: 'Annual interest rate in percent, debts only, if mentioned' },
           monthly: { type: 'number', description: 'Monthly amount they want to put toward it, if mentioned' },
-          deadline: { type: 'string', description: 'Target date YYYY-MM-DD if mentioned (today is 2026-11-07)' } }, required: ['kind', 'type', 'amount'] },
+          deadline: { type: 'string', description: 'Target date YYYY-MM-DD if mentioned (today is ' + TODAY + ')' } }, required: ['kind', 'type', 'amount'] },
         run: async (input) => { usedTool = true; return JSON.stringify(H.applyGoal(input, true)); } },
       { name: 'remove_goal', description: 'Remove a goal the user added earlier.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
         run: async (input) => { usedTool = true; return JSON.stringify(H.removeGoalByName(input.name)); } }];
     try {
       if (!window.claude || !window.claude.complete) throw new Error('no ai');
       const ctx = c._ctx || {};
-      answer = await window.claude.complete({ max_tokens: 600, system: 'You are Kip, a cheerful koi fish and the money sidekick inside the Koin personal finance app. Answer in 2-4 short sentences (max 70 words), plain words, playful but clear. Plain text only: no markdown, no asterisks, no emoji. Use only figures given or returned by tools; never invent numbers. Write durations as “X months and Y days” (a month is 30 days), never decimal months. Koin never moves money; approvals only change the user’s plan. A payment is unsafe if checking would dip under the safety cushion. When the user states a goal (saving for something or paying off a debt), call add_goal right away, then confirm it with the returned figures. If the rate, monthly amount or deadline is missing, still call add_goal: Koin fills in typical defaults (mention that they can adjust it on the goal card). Only ask a follow-up if there is no dollar amount at all. Current figures (made-up demo data): ' + JSON.stringify(ctx),
+      answer = await window.claude.complete({ max_tokens: 600, system: 'You are Kip, a cheerful koi fish and the money sidekick inside the Koin personal finance app. Answer in 2-4 short sentences (max 70 words), plain words, playful but clear. Plain text only: no markdown, no asterisks, no emoji. Use only figures given or returned by tools; never invent numbers. Write durations as “X months and Y days” (a month is 30 days), never decimal months. Koin never moves money; approvals only change the user’s plan. A payment is unsafe if checking would dip under the safety cushion. When the user states a goal (saving for something or paying off a debt), call add_goal right away, then confirm it with the returned figures. If the rate, monthly amount or deadline is missing, still call add_goal: Koin fills in typical defaults (mention that they can adjust it on the goal card). Only ask a follow-up if there is no dollar amount at all. Current figures (' + (SRC.kind === 'demo' ? 'made-up demo data' : 'Nessie sandbox test data') + '): ' + JSON.stringify(ctx),
         messages: chat.filter((m, i) => i > 0).slice(-8).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })), tools });
     } catch (err) {
       live = false; await new Promise(r => setTimeout(r, 1500)); const pg = parseGoal(text);
       const isQ = /\?\s*$/.test(text) || /^(how|when|why|what|where|can|could|should|is|am|do|does|will)\b/i.test(text);
       if (isQ) answer = canned(text, c._ctx || {});
-      else if (pg && pg.amount) { const r = H.applyGoal(pg, false); usedTool = true; answer = r.ok ? 'Added ' + r.goal + ' to your stream! At ' + money(r.monthlyPayment) + ' a month ' + (r.kind === 'save' ? 'you’ll reach ' + money(r.amount) : 'it’s paid off') + ' in ' + r.reachedOrPaidOffIn + (r.date ? ' (' + r.date + ')' : '') + '.' + (r.replacedRent ? ' I swapped your ' + money(r.replacedRent) + ' rent for the mortgage payment.' : '') + (r.overBudget ? ' Heads up: that’s over budget, you’d have ' + money(r.unassignedPerMonthAfter) + ' a month unassigned.' : ' You’d still have ' + money(r.unassignedPerMonthAfter) + ' a month unassigned.') : r.error; }
+      else if (pg && pg.amount) { const r = H.applyGoal(pg, false); usedTool = true; answer = r.ok ? 'Added ' + r.goal + ' to your stream! At ' + money(r.monthlyPayment) + ' a month ' + (r.kind === 'save' ? 'you’ll reach ' + money(r.amount) : 'it’s paid off') + ' in ' + r.reachedOrPaidOffIn + (r.date ? ' (' + r.date + ')' : '') + '.' + (r.replacedRent ? ' I swapped your ' + money(r.replacedRent) + ' rent for the mortgage payment.' : '') + (r.unassignedPerMonthAfter === null ? ' Add your take-home pay in Data & goals so I can check it against your budget.' : r.overBudget ? ' Heads up: that’s over budget, you’d have ' + money(r.unassignedPerMonthAfter) + ' a month unassigned.' : ' You’d still have ' + money(r.unassignedPerMonthAfter) + ' a month unassigned.') : r.error; }
       else if (pg && !pg.amount) answer = 'Ooh, a new goal! How much is it? Tell me the target to save, or the balance you owe.';
       else answer = canned(text, c._ctx || {});
     }
@@ -516,14 +582,14 @@ function handlers(c) {
 function canned(q, x) {
   q = q.toLowerCase(); const hb = x.habits || {}; const goals = x.goals || [];
   if (/lowest|low point|shallow/.test(q)) { const gap = (x.lowestBalance || 0) - (x.safetyCushion || 0);
-    return 'Checking bottoms out at ' + money(x.lowestBalance) + ' on ' + x.lowestDate + ', ' + money(Math.abs(gap)) + (gap >= 0 ? ' above' : ' below') + ' your ' + money(x.safetyCushion) + ' cushion. Bills that land before payday (' + x.paydays + ') pull it down, and I count money out before money in on the same day.'; }
+    return 'Checking bottoms out at ' + money(x.lowestBalance) + ' on ' + x.lowestDate + ', ' + money(Math.abs(gap)) + (gap >= 0 ? ' above' : ' below') + ' your ' + money(x.safetyCushion) + ' cushion. ' + (/not in/.test(x.paydays) ? 'The listed sandbox bills pull it down; pay dates aren’t in sandbox data.' : 'Bills that land before payday (' + x.paydays + ') pull it down, and I count money out before money in on the same day.'); }
   if (/debt.?free|paid off|pay(ing)? off/.test(q)) { const d = goals.filter(g => g.kind === 'payoff');
     if (!d.length) return 'You have no debts listed, so you’re already debt-free in Koin.';
     return d.map(g => g.name + ': ' + (g.date ? g.date + ' (' + g.finishesIn + ')' : 'never at this rate') + ' at ' + money(g.monthly) + ' a month').join('. ') + '. Raise the extra card payment slider to see it move sooner.'; }
   if (/how long|full|emergency fund/.test(q)) { const g = goals.find(x => x.type === 'emergency') || goals.find(x => x.kind === 'save');
     if (!g) return 'You don’t have a savings goal yet. Tell me one, like “save $3,000 for emergencies”.';
     return 'At ' + money(g.monthly) + ' a month, ' + g.name + ' is full ' + (g.date ? 'in ' + g.finishesIn + ' (' + g.date + ')' : 'never at this rate') + '. You’ve saved ' + money(g.saved) + ' of ' + money(g.amount) + '.'; }
-  if (/pay|card|debt/.test(q)) return 'Paying $300 today: checking would ' + ((x.extraPayment300 || {}).today || 'need a review first') + ', against your ' + money(x.safetyCushion) + ' cushion. Try the extra-payment card to check other dates; Nov 15, after payday, is ' + ((x.extraPayment300 || {}).nov15 || 'worth checking') + '.';
+  if (/pay|card|debt/.test(q)) return 'Paying $300 today: checking would ' + ((x.extraPayment300 || {}).today || 'need a review first') + ', against your ' + money(x.safetyCushion) + ' cushion. Try the extra-payment card to check other dates; on ' + (x.extraPayment300 || {}).altLabel + ' it would be ' + (x.extraPayment300 || {}).alt + '.';
   if (/leak|spend|where|habit/.test(q)) return 'Your biggest streams out: groceries ' + money(hb.groceries) + ', dining out ' + money(hb.dining) + ' and shopping ' + money(hb.shopping) + ' a month. Trimming dining by $100 frees $1,200 a year.';
   if (/cushion|safety/.test(q)) return 'Your safety cushion is ' + money(x.safetyCushion) + ': the least you want in checking for surprises. I block any move that would dip below it.';
   return 'Right now your lowest balance ahead is ' + money(x.lowestBalance) + ' on ' + x.lowestDate + ', and you have ' + money(x.unassignedPerMonth) + ' a month unassigned. Tell me a goal and I’ll add it to the stream.';
@@ -532,6 +598,7 @@ function canned(q, x) {
 /* ---------- view ---------- */
 function view(c, React, L) {
   const s = Object.assign({}, DEF, c.state); const H = handlers(c); const P = s.P; const h = React.createElement;
+  SRC = s.src || DEMO_SRC; TODAY = SRC.today; const demo = SRC.kind === 'demo';
   const planned = s.planned.map(p => ({ amount: p.amount, date: p.date }));
   const pre = [compute(s.lv, P, s.goals, s.route, planned, false), compute(s.plan, P, s.goals, s.route, planned, true)];
   const yrs = horizonFor(pre); const HM = 12 * yrs - 1;
@@ -539,32 +606,32 @@ function view(c, React, L) {
   const changed = LEVERS.some(l => s.lv[l.id] !== s.plan[l.id]) || s.goals.some(g => !g.fixed && g.monthly !== g.planMonthly);
   const hist = history(P, s.lv);
   // payment preview
-  const pAmt = +s.pay.amount || 0, pDate = PAY_DATES[s.pay.dateIdx].date;
+  const pAmt = +s.pay.amount || 0, pDate = payDates()[s.pay.dateIdx].date;
   const prev = pAmt > 0 ? compute(s.lv, P, s.goals, s.route, planned.concat([{ amount: pAmt, date: pDate, preview: true }]), false, HM) : null;
   const payOk = prev ? prev.lowest >= P.cushion : false;
   let safer = null;
   if (prev && !payOk) {
-    const alt = PAY_DATES.findIndex((d, i) => i > s.pay.dateIdx && compute(s.lv, P, s.goals, s.route, planned.concat([{ amount: pAmt, date: d.date }]), false).lowest >= P.cushion);
-    if (alt >= 0) safer = { label: 'Pay ' + money(pAmt) + ' on ' + PAY_DATES[alt].sub + ' instead', patch: { dateIdx: alt } };
+    const alt = payDates().findIndex((d, i) => i > s.pay.dateIdx && compute(s.lv, P, s.goals, s.route, planned.concat([{ amount: pAmt, date: d.date }]), false).lowest >= P.cushion);
+    if (alt >= 0) safer = { label: 'Pay ' + money(pAmt) + ' on ' + payDates()[alt].sub + ' instead', patch: { dateIdx: alt } };
     else { const di = between(TODAY, pDate); const minAfter = Math.min.apply(null, sim.days.slice(di).map(d => d.low)); const mx = Math.floor((minAfter - P.cushion) / 10) * 10;
-      if (mx >= 10) safer = { label: 'Pay ' + money(mx) + ' on ' + PAY_DATES[s.pay.dateIdx].sub + ' instead', patch: { amount: String(mx) } }; }
+      if (mx >= 10) safer = { label: 'Pay ' + money(mx) + ' on ' + payDates()[s.pay.dateIdx].sub + ' instead', patch: { amount: String(mx) } }; }
   }
-  const payFacts = prev ? [['Lowest balance', money(sim.lowest), money(prev.lowest)], ['Card balance', money(sim.owe), money(prev.owe)], ['Card paid off', sim.debtDate ? fMonth(sim.debtDate) : 'Never', prev.debtDate ? fMonth(prev.debtDate) : 'Never']] : [];
+  const payFacts = prev ? [['Lowest balance', money(sim.lowest), money(prev.lowest)], [demo ? 'Card balance' : 'Owed', money(sim.owe), money(prev.owe)], ['Paid off', sim.debtDate ? fMonth(sim.debtDate) : neverOr(sim.debtUnknown), prev.debtDate ? fMonth(prev.debtDate) : neverOr(prev.debtUnknown)]] : [];
   const payStepsRaw = [['Financial engine', 'CODE', 'Re-ran your 30-day outlook with the payment.'],
     ['Verifier', 'CODE', payOk ? 'Every day stays above your ' + money(P.cushion) + ' cushion. Passed.' : 'Checking would dip to ' + money(prev ? prev.lowest : 0) + ' on ' + fDay(prev ? prev.lowestDate : TODAY) + '. Blocked.'],
     ['Strategist', 'AI', payOk ? 'No safer option needed.' : safer ? 'Safer option: ' + safer.label.toLowerCase() + '.' : 'No safe option found this month.', payOk],
     ['Coach', 'AI', 'Wrote the summary with verified figures only.']];
   c._payResult = { ok: payOk, safer, facts: payFacts, stepsRaw: payStepsRaw };
-  const lockOk = sim.leftover >= 0 && sim.lowest >= P.cushion;
+  const lockOk = (!sim.budgetKnown || sim.leftover >= 0) && sim.lowest >= P.cushion;
   const spendDelta = sim.disc + s.lv.subs - (plan.disc + s.plan.subs);
-  const lockFacts = [['Habit spending / mo', money(plan.disc + s.plan.subs), money(sim.disc + s.lv.subs)], ['Net worth in a year', money(plan.nw12), money(sim.nw12)], [P.goalName + ' in', fmtDur(plan.goalMonths), fmtDur(sim.goalMonths)], ['Card paid off', plan.debtDate ? fMonth(plan.debtDate) : 'Never', sim.debtDate ? fMonth(sim.debtDate) : 'Never']];
+  const lockFacts = [['Habit spending / mo', money(plan.disc + s.plan.subs), money(sim.disc + s.lv.subs)], ['Net worth in a year', money(plan.nw12), money(sim.nw12)], [P.goalName + ' in', fmtDur(plan.goalMonths), fmtDur(sim.goalMonths)], ['Paid off', plan.debtDate ? fMonth(plan.debtDate) : neverOr(plan.debtUnknown), sim.debtDate ? fMonth(sim.debtDate) : neverOr(sim.debtUnknown)]];
   const lockStepsRaw = [['Financial engine', 'CODE', 'Re-ran your outlook and the years ahead with the new habits.'], ['Verifier', 'CODE', lockOk ? 'Stays above your cushion and within budget. Passed.' : 'Breaks your cushion or budget. Blocked.'], ['Coach', 'AI', 'Summarized what changes.']];
   c._lockResult = { facts: lockFacts, stepsRaw: lockStepsRaw, summary: (spendDelta <= 0 ? money(-spendDelta) + ' less' : money(spendDelta) + ' more') + ' spending a month' };
-  c._ctx = { today: 'Nov 7, 2026', checking: P.checking, savings: P.savings, safetyCushion: P.cushion, lowestBalance: Math.round(sim.lowest), lowestDate: fDay(sim.lowestDate), netWorthNow: Math.round(sim.nwNow), netWorthInAYear: Math.round(sim.nw12),
-    emergencyCoverage: fmtDur(sim.cov), unassignedPerMonth: Math.round(sim.leftover), takeHomePay: P.income, essentialBills: sim.essentials, habits: Object.fromEntries(LEVERS.map(l => [l.id, s.lv[l.id]])), freedCashGoesTo: s.route, paydays: 'Nov 14 and Nov 28', rent: sim.hasMortgage ? 'replaced by mortgage' : money(P.rent) + ' on Nov 10',
+  c._ctx = { today: fDay(TODAY) + ', ' + D(TODAY).getUTCFullYear(), dataSource: SRC.label, checking: P.checking, savings: P.savings, safetyCushion: P.cushion, lowestBalance: Math.round(sim.lowest), lowestDate: fDay(sim.lowestDate), netWorthNow: Math.round(sim.nwNow), netWorthInAYear: Math.round(sim.nw12),
+    emergencyCoverage: fmtDur(sim.cov), unassignedPerMonth: sim.budgetKnown ? Math.round(sim.leftover) : 'unknown (take-home pay not entered)', takeHomePay: P.income, essentialBills: sim.essentials, habits: Object.fromEntries(LEVERS.map(l => [l.id, s.lv[l.id]])), freedCashGoesTo: s.route, paydays: SRC.paydaysText, rent: SRC.kind !== 'demo' ? 'sandbox bills: ' + money(SRC.billsMonthly) + ' in the next 30 days' : sim.hasMortgage ? 'replaced by mortgage' : money(P.rent) + ' on Nov 10',
     goals: sim.goals.map(g => { const r = sim.goalMap[g.id]; return { name: g.name, type: g.type, kind: g.kind, amount: g.kind === 'save' ? g.target : g.balance, saved: g.saved || 0, apr: g.apr || null, monthly: Math.round(sim.gs.find(x => x.g.id === g.id).m), finishesIn: r.months === null ? 'never' : fmtDur(r.months), date: r.date ? fMonth(r.date) : null }; }),
-    extraPayment300: (() => { const t = compute(s.lv, P, s.goals, s.route, planned.concat([{ amount: 300, date: TODAY }]), false).lowest, n = compute(s.lv, P, s.goals, s.route, planned.concat([{ amount: 300, date: '2026-11-15' }]), false).lowest;
-      return { today: (t >= P.cushion ? 'stay at or above ' : 'dip to ') + money(t), nov15: n >= P.cushion ? 'above your cushion' : 'still under your cushion' }; })() };
+    extraPayment300: (() => { const t = compute(s.lv, P, s.goals, s.route, planned.concat([{ amount: 300, date: TODAY }]), false).lowest, altD = payDates()[2], n = compute(s.lv, P, s.goals, s.route, planned.concat([{ amount: 300, date: altD.date }]), false).lowest;
+      return { today: (t >= P.cushion ? 'stay at or above ' : 'dip to ') + money(t), altLabel: altD.sub, alt: n >= P.cushion ? 'above your cushion' : 'still under your cushion' }; })() };
 
   /* geometry */
   const pxYear = Math.max(90, Math.min(190, Math.round(2000 / Math.max(1, yrs - 1))));
@@ -593,13 +660,13 @@ function view(c, React, L) {
     if (dt <= dYd) return x29 + between(d29d, dt) / between(d29d, dYd) * 11 * L.pxMonth; if (dt <= lastM) return xY + between(dYd, dt) / between(dYd, lastM) * (yrs - 1) * pxYear; return null; };
   const yAt = x => { for (let i = 0; i < N - 1; i++) if (x >= xs[i] && x <= xs[i + 1]) { const t = (x - xs[i]) / (xs[i + 1] - xs[i]); return Y(sv[i] + (sv[i + 1] - sv[i]) * t); } return x < xs[0] ? sp[0][1] : sp[N - 1][1]; };
   const vw = c._vw || 1200;
-  const segs = [{ label: 'Last 10 days', sub: 'what happened', x: L.padL }, { label: 'Next 30 days', sub: 'day by day', x: x0 }, { label: 'The year ahead', sub: 'month by month', x: x29 }];
+  const segs = [{ label: 'Last 10 days', sub: demo ? 'what happened' : 'history not in sandbox data', x: L.padL }, { label: 'Next 30 days', sub: 'day by day', x: x0 }, { label: 'The year ahead', sub: 'month by month', x: x29 }];
   if (yrs > 1) segs.push({ label: 'The long run', sub: 'year by year', x: xY });
   const breaks = [{ x: x29, label: 'ZOOMING OUT' }].concat(yrs > 1 ? [{ x: xY, label: 'ZOOMING OUT MORE' }] : []);
   const ticks = [];
   hist.forEach((d, i) => { if (i % 3 === 0 && i > 0 && i < 9) ticks.push({ x: X(i), label: fDay(d.date) }); });
   sim.days.forEach((d, i) => { if (i % 3 === 0 && i > 0 && i < 29) ticks.push({ x: X(10 + i), label: fDay(d.date) }); });
-  sim.months.slice(0, 11).forEach((m, i) => ticks.push({ x: X(40 + i), label: (D(m.date).getUTCMonth() === 0 ? MON[0] + ' ’27' : MON[D(m.date).getUTCMonth()]) }));
+  sim.months.slice(0, 11).forEach((m, i) => ticks.push({ x: X(40 + i), label: (D(m.date).getUTCMonth() === 0 ? MON[0] + ' ’' + String(D(m.date).getUTCFullYear()).slice(2) : MON[D(m.date).getUTCMonth()]) }));
   const ystep = pxYear >= 110 ? 1 : pxYear >= 60 ? 2 : 5;
   yrIdx.forEach((mi, k) => { if ((k + 1) % ystep === 0 || k === yrIdx.length - 1) ticks.push({ x: X(51 + k), label: String(D(sim.months[mi].date).getUTCFullYear()) }); });
   const axisMoney = v => (v < 0 ? '−' : '') + '$' + (Math.abs(v) >= 1000 ? (Math.abs(v) / 1000).toLocaleString('en-US') + 'k' : Math.abs(v));
@@ -657,7 +724,7 @@ function view(c, React, L) {
     { label: 'Lowest ahead', term: 'lowest', valEl: num(sim.lowest), sub: fDay(sim.lowestDate), d: moneyDelta(plan.lowest, sim.lowest), tone: T(sim.gap < 0 ? 'bad' : sim.gap < 100 ? 'warn' : 'good') },
     { label: 'Net worth in a year', term: 'networth12', valEl: num(sim.nw12), sub: 'now ' + money(sim.nwNow), d: moneyDelta(plan.nw12, sim.nw12), tone: T('ink') },
     { label: 'Next goal', term: 'nextgoal', valEl: next ? fMonth(next.r.date) : 'None on track', sub: next ? next.g.name : 'Add one with Kip', d: next ? durDelta(nextPlan.months, next.r.months) : durDelta(0, 0), tone: T('ink') },
-    { label: 'Debt-free', term: 'debtfree', valEl: sim.debtFree ? fMonth(sim.debtFree) : 'Never', sub: money(sim.goals.filter(g => g.kind === 'payoff').reduce((a, g) => a + g.balance, 0) - planned.reduce((a, e) => a + e.amount, 0)) + ' owed', d: durDelta(plan.debtFreeMonths, sim.debtFreeMonths), tone: T('ink') },
+    { label: 'Debt-free', term: 'debtfree', valEl: sim.debtFree ? fMonth(sim.debtFree) : neverOr(sim.debtUnknown), sub: money(sim.goals.filter(g => g.kind === 'payoff').reduce((a, g) => a + g.balance, 0) - planned.reduce((a, e) => a + e.amount, 0)) + ' owed', d: durDelta(plan.debtFreeMonths, sim.debtFreeMonths), tone: T('ink') },
   ].map(m => Object.assign(m, { dText: m.d.text, dTone: T(m.d.tone), dShow: m.d.show, dBg: T(m.d.tone + '-soft'), subShow: !m.d.show }));
 
   /* cards */
@@ -665,18 +732,20 @@ function view(c, React, L) {
   if (sim.lowest < 0) findings.push(['bad', 'Heads up', 'Checking drops below zero on ' + fDay(sim.lowestDate) + '.']);
   else if (sim.gap < 0) findings.push(['bad', 'Heads up', 'Checking dips under your safety cushion on ' + fDay(sim.lowestDate) + '.']);
   else if (sim.gap < 100) findings.push(['warn', 'Watch', 'Checking gets within ' + money(sim.gap) + ' of your cushion on ' + fDay(sim.lowestDate) + '.']);
-  if (sim.leftover < 0) findings.push(['bad', 'Heads up', 'Your plan spends ' + money(-sim.leftover) + ' a month more than comes in.']);
+  if (!sim.budgetKnown) findings.push(['info', 'Add info', 'Take-home pay isn’t in sandbox data. Add it in Data & goals; until then no income is counted.']);
+  if (sim.budgetKnown && sim.leftover < 0) findings.push(['bad', 'Heads up', 'Your plan spends ' + money(-sim.leftover) + ' a month more than comes in.']);
   if (sim.cov < 3) findings.push(['warn', 'Watch', 'Emergency savings cover about ' + fmtDur(sim.cov) + ' of essential bills.']);
-  if (sim.debtMonths === null || sim.debtMonths > 36) findings.push(['warn', 'Watch', 'At ' + money(P.minPay + sim.effExtra) + ' a month, your card ' + (sim.debtDate ? 'takes until ' + fMonth(sim.debtDate) + ' to clear.' : 'never clears.')]);
-  if (sim.leftover > 150) findings.push(['info', 'Idea', money(sim.leftover) + ' a month isn’t assigned to anything yet.']);
-  const stand = { checking: money(P.checking), savings: money(P.savings), owe: money(sim.owe), nw: money(sim.nwNow), nwTone: T(sim.nwNow < 0 ? 'bad' : 'ink'), cov: fmtDur(sim.cov), lowest: money(sim.lowest), lowestDate: fDay(sim.lowestDate), lowTone: T(sim.gap < 0 ? 'bad' : sim.gap < 100 ? 'warn' : 'good'),
+  if (sim.debtUnknown) findings.push(['info', 'Add info', 'Add your APR and minimum payment in Data & goals to see when you’re debt-free.']);
+  else if (sim.owe > 0 && (sim.debtMonths === null || sim.debtMonths > 36)) findings.push(['warn', 'Watch', 'At ' + money(P.minPay + sim.effExtra) + ' a month, your card ' + (sim.debtDate ? 'takes until ' + fMonth(sim.debtDate) + ' to clear.' : 'never clears.')]);
+  if (sim.budgetKnown && sim.leftover > 150) findings.push(['info', 'Idea', money(sim.leftover) + ' a month isn’t assigned to anything yet.']);
+  const stand = { oweWhat: demo ? 'on your card' : 'on cards and loans', checking: money(P.checking), savings: money(P.savings), owe: money(sim.owe), nw: money(sim.nwNow), nwTone: T(sim.nwNow < 0 ? 'bad' : 'ink'), cov: fmtDur(sim.cov), lowest: money(sim.lowest), lowestDate: fDay(sim.lowestDate), lowTone: T(sim.gap < 0 ? 'bad' : sim.gap < 100 ? 'warn' : 'good'),
     findings: findings.slice(0, 3).map(x => ({ kind: x[1], text: x[2], dot: T(x[0]), bg: T(x[0] + '-soft') })) };
   const lowTone = sim.gap < 0 ? 'bad' : sim.gap < 100 ? 'warn' : 'good';
   const low = { value: money(sim.lowest), date: fDay(sim.lowestDate), gap: sim.gap >= 0 ? money(sim.gap) + ' above your cushion' : money(-sim.gap) + ' below your cushion', tone: T(lowTone), toneSoft: T(lowTone + '-soft'),
     title: sim.lowest < 0 ? 'Below zero' : sim.gap < 0 ? 'Under the cushion' : sim.gap < 100 ? 'Shallow water' : 'Plenty of water',
-    why: sim.li >= 7 && sim.li <= 8 ? 'Rent and utilities land before your Nov 14 paycheck. Money out is counted before money in.' : 'The lowest point in the next 30 days, after listed bills, habits and goals.' };
+    why: SRC.kind === 'demo' && sim.li >= 7 && sim.li <= 8 ? 'Rent and utilities land before your Nov 14 paycheck. Money out is counted before money in.' : 'The lowest point in the next 30 days, after listed bills, habits and goals.' };
   const pr = s.pay;
-  const pay = { amount: pr.amount, chips: PAY_DATES.map((d, i) => ({ label: d.label, sub: d.sub, active: i === pr.dateIdx, onClick: H.payDate(i), bg: i === pr.dateIdx ? T('ink') : 'transparent', fg: i === pr.dateIdx ? T('bg') : T('ink'), bd: i === pr.dateIdx ? T('ink') : T('line') })),
+  const pay = { amount: pr.amount, chips: payDates().map((d, i) => ({ label: d.label, sub: d.sub, active: i === pr.dateIdx, onClick: H.payDate(i), bg: i === pr.dateIdx ? T('ink') : 'transparent', fg: i === pr.dateIdx ? T('bg') : T('ink'), bd: i === pr.dateIdx ? T('ink') : T('line') })),
     rows: payFacts.map(r => ({ label: r[0], before: r[1], after: r[2] })), hasRows: payFacts.length > 0,
     idle: pr.phase === 'idle', reviewing: pr.phase === 'reviewing', done: pr.phase === 'done',
     steps: stepRows(payStepsRaw.map(x => x.slice(0, 3)), pr.phase === 'reviewing' ? pr.step : undefined),
@@ -693,7 +762,7 @@ function view(c, React, L) {
     const r = sim.goalMap[g.id], rp = plan.goalMap[g.id]; const col = goalColor(g); const m = sim.gs.find(x => x.g.id === g.id).m; const mp = plan.gs.find(x => x.g.id === g.id).m;
     const baseM = goalMonthly(g, s.lv, false), planBase = goalMonthly(g, s.plan, true);
     const chg = Math.round(baseM) !== Math.round(planBase);
-    const ok = sim.leftover >= 0 && sim.lowest >= P.cushion;
+    const ok = (!sim.budgetKnown || sim.leftover >= 0) && sim.lowest >= P.cushion;
     const dd = durDelta(rp.months, r.months);
     const facts = [['Monthly', money(planBase), money(baseM)], [g.kind === 'save' ? 'Reached in' : 'Paid off in', fmtDur(rp.months), fmtDur(r.months)], ['Unassigned each month', money(plan.leftover), money(sim.leftover)]];
     const stepsRaw = [['Financial engine', 'CODE', 'Recalculated this goal and your monthly budget.'], ['Verifier', 'CODE', ok ? 'Fits your budget and keeps your cushion. Passed.' : sim.leftover < 0 ? 'Over budget by ' + money(-sim.leftover) + ' a month. Blocked.' : 'Would dip under your cushion. Blocked.'], ['Coach', 'AI', 'Summarized the change with verified figures.']];
@@ -704,8 +773,8 @@ function view(c, React, L) {
     const late = isSave && g.deadline && r.date && r.date > g.deadline;
     const note = g.type === 'mortgage' ? 'Replaces your ' + money(P.rent) + ' rent. Not counted in net worth.' : isSave && g.deadline ? (r.date ? (late ? 'Target ' + fMonth(g.deadline) + ': late by ' + fmtDur(between(g.deadline, r.date) / 30) + '.' : 'Target ' + fMonth(g.deadline) + ': on track.') : 'Target ' + fMonth(g.deadline) + '.') : g.id === 'card' ? 'Minimum ' + money(P.minPay) + ' plus extra. Try the extra-payment card too.' : g.id === 'emergency' ? 'Goal: about ' + fmtDur(g.target / sim.essentials) + ' of essential bills.' : '';
     return { id: g.id, left: cardL[g.id], color: T(col), colorSoft: T(col + '-soft'), typeLabel: TYPES[g.type].label.toUpperCase(), name: g.name, isSave, isPayoff: !isSave,
-      bigDate: r.date ? fMonth(r.date) : 'Never', verb: isSave ? 'Reached' : 'Paid off', dShow: dd.show, d: dd.text, dTone: T(dd.tone),
-      pct: (isSave ? pct : 0).toFixed(1) + '%', progressText: isSave ? money(g.saved) + ' of ' + money(g.target) + ' saved' : money(r.owe !== undefined ? r.owe : g.balance) + ' owed · ' + g.apr + '% APR',
+      bigDate: r.date ? fMonth(r.date) : neverOr(r.unknown), verb: isSave ? 'Reached' : 'Paid off', dShow: dd.show, d: dd.text, dTone: T(dd.tone),
+      pct: (isSave ? pct : 0).toFixed(1) + '%', progressText: isSave ? money(g.saved) + ' of ' + money(g.target) + ' saved' : money(r.owe !== undefined ? r.owe : g.balance) + ' owed · ' + (g.apr == null ? 'APR unknown' : g.apr + '% APR'),
       monthly: money(m), duration: fmtDur(r.months), third: isSave ? money(Math.max(0, g.target - g.saved)) : r.interest === null ? '—' : money(r.interest), thirdLabel: isSave ? 'Still to save' : 'Total interest',
       hasRouted: s.route === g.id && sim.freed > 0, routed: '+' + money(Math.max(0, sim.freed)) + ' freed up',
       down: H.bump(g.id, -25), up: H.bump(g.id, 25), removable: !g.fixed, remove: H.removeGoal(g.id), note, hasNote: !!note,
@@ -737,12 +806,18 @@ function view(c, React, L) {
   const receipts = s.receipts.map(r => ({ id: r.id, when: r.when, title: r.title, verdict: r.verdict, vTone: T(r.tone), vBg: T(r.tone + '-soft'), kind: r.kind, onClick: H.openRec(r.id), active: s.openRec === r.id }));
   const rr = s.receipts.find(r => r.id === s.openRec);
   const rec = rr ? { title: rr.title, when: rr.when, kind: rr.kind, verdict: rr.verdict, vTone: T(rr.tone), vBg: T(rr.tone + '-soft'), facts: rr.facts.map(x => ({ label: x[0], before: x[1], after: x[2] })), checks: rr.checks.map(x => ({ label: x[0], mark: x[1] ? '✓' : '✕', tone: T(x[1] ? 'good' : 'bad') })), steps: stepRows(rr.steps), note: rr.note } : null;
-  const field = (k, label, pre, suf) => ({ key: k, label, value: String(P[k]), onChange: H.prof(k), pre: pre || '', suf: suf || '' });
+  const field = (k, label, pre, suf, o) => ({ key: k, label, value: P[k] == null ? '' : String(P[k]), onChange: H.prof(k), pre: pre || '', suf: suf || '', ro: !!(o && o.ro), ph: (o && o.ph) || '', op: o && o.ro ? .7 : 1 });
+  const fixed = v => ({ key: 'x', label: v[0], value: v[1], onChange: H.stop, pre: '$', suf: '', ro: true, ph: '', op: .7 });
+  const fromSandbox = { ro: true }, unknownPh = { ph: 'Not in sandbox data' };
+  const ss = s.srcState, busySrc = ss.status === 'loading' || ss.status === 'syncing';
+  const srcOpts = [h('option', { key: 'demo', value: 'demo' }, DEMO_SRC.label)].concat(ss.customers.map(x => h('option', { key: x.id, value: x.id }, x.label + ' · Nessie sandbox')),
+    ss.status === 'loading' ? [h('option', { key: 'l', disabled: true, value: '_l' }, 'Loading sandbox customers…')] : ss.status === 'error' && !ss.customers.length ? [h('option', { key: 'e', disabled: true, value: '_e' }, 'Nessie sandbox customers (unavailable)')] : []);
+  const sourceSelect = h('select', { value: demo ? 'demo' : SRC.customerId, onChange: H.chooseSource, disabled: busySrc, 'aria-label': 'Data source', style: { flex: 1, height: 36, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 10, background: 'var(--surface)', color: 'var(--ink)', fontSize: 13, fontFamily: 'inherit', minWidth: 0 } }, srcOpts);
   const howObj = s.how ? HOW[s.how] : null;
   const tipG = s.tip ? GLOSSARY[s.tip.term] : null;
   const below = s.tip && s.tip.y < 190;
   return {
-    ready: true, loading: false, theme: s.theme, knobX: s.theme === 'dark' ? 'translateX(28px)' : 'translateX(0px)', toggleTheme: H.toggleTheme, themeLabel: s.theme === 'dark' ? 'Light mode' : 'Dark mode', asOf: 'Nov 7, 2026',
+    ready: true, loading: false, theme: s.theme, knobX: s.theme === 'dark' ? 'translateX(28px)' : 'translateX(0px)', toggleTheme: H.toggleTheme, themeLabel: s.theme === 'dark' ? 'Light mode' : 'Dark mode', asOf: fDay(TODAY) + ', ' + D(TODAY).getUTCFullYear(),
     kipLogo: kip(React, { mood: sim.mood, size: 46 }), kipDock: kip(React, { mood: sim.mood, size: L.dockKip || 96 }), kipSwim: kip(React, { mood: sim.mood, size: 74, flip: !!c._flip, bubbles: true }), kipChat: kip(React, { mood: 'happy', size: 36, still: true }), kipHub: kip(React, { mood: sim.mood, size: 56 }),
     kipMood: 'Kip is ' + MOOD[sim.mood].label, kipLine: kipSays(s, sim, plan, P), mood: sim.mood,
     ripple: h('span', { key: s.ripple, style: { position: 'absolute', left: '50%', top: '50%', width: 120, height: 120, marginLeft: -60, marginTop: -60, borderRadius: '50%', border: '2px solid rgba(255,255,255,.8)', pointerEvents: 'none', animation: s.ripple ? 'koinRipple 1.1s ease-out forwards' : 'none', opacity: 0 } }),
@@ -766,9 +841,15 @@ function view(c, React, L) {
       return qs.filter(q => !asked.has(q)).slice(0, s.chat.length < 3 ? 4 : 99).map(q => ({ text: q, onClick: H.ask(q) })); })(), showSuggest: !s.chatBusy, chipsRef: H.chipsRef, suggestWrap: s.chat.length < 3 ? 'wrap' : 'nowrap',
     receipts, receiptCount: String(s.receipts.length), rec, hasRec: !!rec, noRec: !rec, closeRec: H.closeRec,
     setupOpen: s.setup, openSetup: H.openSetup, closeSetup: H.closeSetup, stop: H.stop,
-    fieldsMoney: [field('income', 'Take-home pay / month', '$'), field('rent', 'Rent', '$'), field('utilities', 'Utilities', '$'), field('cushion', 'Safety cushion', '$')],
-    fieldsDebt: [field('owe', 'Card balance', '$'), field('apr', 'Card APR', '', '%'), field('minPay', 'Minimum payment', '$'), field('checking', 'Checking today', '$')],
-    fieldsGoal: [field('goalName', 'Goal name'), field('goalTarget', 'Target', '$'), field('savings', 'Saved so far', '$')],
+    fieldsMoney: demo ? [field('income', 'Take-home pay / month', '$'), field('rent', 'Rent', '$'), field('utilities', 'Utilities', '$'), field('cushion', 'Safety cushion', '$')]
+      : [field('income', 'Take-home pay / month', '$', '', unknownPh), fixed(['Sandbox bills, next 30 days', String(Math.round(SRC.billsMonthly))]), field('cushion', 'Safety cushion', '$')],
+    fieldsDebt: demo ? [field('owe', 'Card balance', '$'), field('apr', 'Card APR', '', '%'), field('minPay', 'Minimum payment', '$'), field('checking', 'Checking today', '$')]
+      : [field('owe', 'Owed on cards & loans', '$', '', fromSandbox), field('apr', 'APR', '', '%', unknownPh), field('minPay', 'Minimum payment / month', '$', '', unknownPh), field('checking', 'Checking today', '$', '', fromSandbox)],
+    fieldsGoal: [field('goalName', 'Goal name'), field('goalTarget', 'Target', '$'), field('savings', 'Saved so far', '$', '', demo ? null : fromSandbox)],
+    sourceSelect, sourceMsg: ss.message, hasSourceMsg: !!ss.message, sourceTone: T(ss.status === 'error' ? 'bad' : 'muted'), srcRo: demo ? 'READ-ONLY' : 'SANDBOX · READ-ONLY',
+    setupNote: demo ? 'Everything updates live. Blank or zero means unknown.' : 'Grey fields come from the sandbox. Blank means unknown; Koin won’t guess it.',
+    srcBadge: SRC.badge, srcBadgeBg: T(demo ? 'you-bg' : 'data-bg'), srcBadgeFg: T(demo ? 'you-fg' : 'data-fg'), todayLabel: 'TODAY · ' + fDay(TODAY).toUpperCase(),
+    yearLabel: fMonth(addMonths(TODAY, 12)).toUpperCase() + ' · A YEAR FROM NOW', oweWhat: demo ? 'on your card' : 'on cards and loans',
     howOpen: !!howObj, how: howObj ? { title: howObj.title, intro: howObj.intro, note: howObj.note, steps: howObj.steps.map((x, i) => { const [bg, fg] = STEP_TONE[x[0]]; return { n: i + 1, kind: x[0], title: x[1], text: x[2], kBg: T(bg), kFg: T(fg) }; }) } : null,
     closeHow: H.closeHow, howStand: H.how('stand'), howForecast: H.how('forecast'), howPay: H.how('pay'), howApprove: H.how('approve'), howKip: H.how('kip'), howGoals: H.how('goals'),
     tip: tipG ? { show: true, x: s.tip.x, y: below ? s.tip.b + 10 : s.tip.y - 10, tr: below ? 'translate(-50%,0)' : 'translate(-50%,-100%)', title: tipG[0], def: tipG[1] } : { show: false }, showTip: H.showTip, hideTip: H.hideTip,
