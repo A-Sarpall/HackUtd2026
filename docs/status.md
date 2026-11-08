@@ -1,0 +1,1 @@
+HTML prototype integrated with existing backend. Original design retained with responsive adaptation. Same-origin routes serve dashboard and API. Demo session survives reload. Browser journey verified; automated tests pass. Nessie and credentialed Nemotron remain unverified/unconnected as described in README.
