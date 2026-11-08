@@ -1,4 +1,4 @@
-import {simulate,integer,finalizeSnapshot,sumCents,addDays,formatCents,goalProgress,monthlyLeftover} from './finance.mjs';
+import {simulate,integer,signedInteger,finalizeSnapshot,sumCents,addDays,formatCents,goalProgress,monthlyLeftover} from './finance.mjs';
 
 export function validateProfile(p) {
   if(!p||typeof p!=='object'||Array.isArray(p))throw Error('INVALID_PROFILE');
@@ -177,6 +177,36 @@ export function reviewFacts(s,action){
       months_now:monthsText(now.months),months_new:monthsText(after.months),reach_now:monthYear(now.reachDate),reach_new:monthYear(after.reachDate),deadline:monthYear(after.deadline),
       leftover_now:m(leftoverNow),leftover_new:m(leftoverNew),max_affordable:m(maxAffordable),emergency_coverage:coverageText(s),smaller_amount:options.smaller?m(options.smaller.amountCents):null};
     return {kind:'goal_contribution',policy:blocked?'blocked':'allowed',options,warnings,facts,progressNow:now,progressNew:after,leftoverNowCents:leftoverNow,leftoverNewCents:leftoverNew};
+  }
+  // A signed change to what the user plans to pay toward one card or loan each month, against the saved profile's debts.
+  if(action?.kind==='debt_monthly'){
+    const p=s.profile||{},d=(p.debts||[]).find(x=>x.id===action.debtId);if(!d)throw Error('NO_DEBT');
+    const change=signedInteger(action.changeCents);if(change===0||Math.abs(change)>1e9)throw Error('INVALID_AMOUNT');
+    const current=d.monthlyCents??null,next=current==null?null:current+change;
+    if(next!=null&&next<0)throw Error('INVALID_AMOUNT');
+    // An increase leaves checking on the debt's planned payment day; with no planned day, the check assumes today (the strictest case).
+    const flow=(p.planFlows||[]).find(f=>f.id==='debt-'+d.id&&Number.isInteger(f.every));
+    let payDate=s.asOf;if(flow)for(let i=0;i<30;i++){const day=addDays(s.asOf,i);if(Number(day.slice(8,10))===flow.every){payDate=day;break;}}
+    const cashWith=c=>c>0?simulate(s,[{kind:'extra_debt_payment',amountCents:c,date:payDate}]):simulate(s);
+    const base=simulate(s),r=cashWith(change);
+    const leftoverNow=s.budget.leftoverCents,leftoverFor=c=>leftoverNow==null?null:sumCents([leftoverNow,-c]),leftoverNew=leftoverFor(change);
+    const blockedFor=c=>c>0&&(cashWith(c).policy==='blocked'||(leftoverNow!=null&&leftoverFor(c)<0));
+    const cashBlocked=change>0&&r.policy==='blocked',overBudget=change>0&&leftoverNew!=null&&leftoverNew<0,blocked=cashBlocked||overBudget;
+    let smaller=null;
+    if(blocked){const cap=Math.min(Math.max(0,base.minCashCents-s.cashFloorCents),leftoverNow==null?Infinity:Math.max(0,leftoverNow));if(cap>0&&cap<change&&!blockedFor(cap))smaller=cap;}
+    const options={requested:{changeCents:change,policy:blocked?'blocked':'allowed'},...(smaller?{smaller:{changeCents:smaller,policy:'allowed'}}:{})};
+    const terms=c=>d.aprBps==null||c==null||c<=0||d.balanceCents<=0?null:payoff({principalCents:d.balanceCents,paymentCents:c,aprBps:d.aprBps},0);
+    const before=terms(current),after=terms(next);
+    const saved=before?.interestCents!=null&&after?.interestCents!=null&&before.interestCents>after.interestCents?before.interestCents-after.interestCents:null;
+    const margin=r.minCashCents-s.cashFloorCents;
+    const warnings=[cashBlocked&&'below_cushion',overBudget&&'over_budget',change>0&&leftoverNow==null&&'budget_unknown',d.aprBps==null&&'apr_unknown',current==null&&'payment_unknown',change<0&&'slower_payoff',
+      !cashBlocked&&change>0&&margin>=0&&margin<s.cashFloorCents&&'thin_margin',s.essentialMonthlyCents>0&&s.savingsCents<s.essentialMonthlyCents&&'low_emergency_savings'].filter(Boolean);
+    const facts={debt_name:d.name,balance:m(d.balanceCents),apr:pct(d.aprBps),current_amount:m(current),new_amount:m(next),change:m(Math.abs(change)),
+      lowest_balance:m(r.minCashCents),lowest_date:shortDate(r.minCashDate),cushion:m(s.cashFloorCents),shortfall:cashBlocked?m(s.cashFloorCents-r.minCashCents):null,margin_above_cushion:margin>=0?m(margin):null,
+      leftover_now:m(leftoverNow),leftover_new:m(leftoverNew),months_now:monthsText(before?.months??null),months_new:monthsText(after?.months??null),
+      interest_now:m(before?.interestCents??null),interest_new:m(after?.interestCents??null),interest_saved:m(saved),smaller_amount:m(smaller),emergency_coverage:coverageText(s)};
+    return {kind:'debt_monthly',policy:blocked?'blocked':'allowed',options,warnings,facts,
+      comparison:{debtId:d.id,changeCents:change,currentMonthlyCents:current,newMonthlyCents:next,minCashCents:r.minCashCents,minCashDate:r.minCashDate,baselineMinCashCents:base.minCashCents,leftoverNowCents:leftoverNow,leftoverNewCents:leftoverNew,payoffMonthsNow:before?.months??null,payoffMonthsNew:after?.months??null,interestNowCents:before?.interestCents??null,interestNewCents:after?.interestCents??null}};
   }
   throw Error('UNSUPPORTED_ACTION');
 }

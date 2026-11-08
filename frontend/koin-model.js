@@ -479,9 +479,14 @@ function handlers(c) {
   H.lever = id => memo('lv' + id, e => { const v = +e.target.value; c.setState(st => { const s = Object.assign({}, DEF, st); return Object.assign({ lv: Object.assign({}, s.lv, { [id]: v }), lastLever: id, ripple: s.ripple + 1 }, idle); }); });
   H.routeSel = e => { const r = e.target.value; c.setState(st => ({ route: r, lastLever: 'route', ripple: (st.ripple || 0) + 1, lockRev: { phase: 'idle', step: 0 } })); H.pushProfile(); };
   H.reset = () => set(Object.assign({ lv: S().plan, goals: S().goals.map(g => g.fixed ? g : Object.assign({}, g, { monthly: g.planMonthly })), lastLever: null }, idle));
-  H.bump = (id, d) => memo('bp' + id + d, () => c.setState(st => { const s = Object.assign({}, DEF, st);
-    if (id === 'emergency' || id === 'card') { const lid = id === 'emergency' ? 'goal' : 'extraDebt'; const l = LEVERS.find(x => x.id === lid); const v = Math.min(l.max, Math.max(l.min, s.lv[lid] + d)); return Object.assign({ lv: Object.assign({}, s.lv, { [lid]: v }), lastLever: lid, ripple: s.ripple + 1 }, idle); }
-    return Object.assign({ goals: s.goals.map(g => g.id === id ? Object.assign({}, g, { monthly: Math.max(0, g.monthly + d) }) : g), lastLever: null, ripple: s.ripple + 1 }, idle); }));
+  // Monthly change typed as "+30", "-40" or "$15.50" (no sign means increase). Nothing changes until Review change runs the agents.
+  H.adjField = id => memo('af' + id, e => { const v = e.target.value;
+    c.setState(st => Object.assign({ adj: Object.assign({}, st.adj, { [id]: v }) }, st.goalRev && st.goalRev.id === id && st.goalRev.phase === 'done' ? { goalRev: { id: null, phase: 'idle', step: 0 } } : {})); });
+  H.adjKey = id => memo('ak' + id, e => { if (e.key === 'Enter') { e.preventDefault(); H.goalReview(id)(); } });
+  H.bump = (id, d) => memo('bp' + id + d, () => H.bumpBy(id, d));
+  H.bumpBy = (id, d) => c.setState(st => { const s = Object.assign({}, DEF, st);
+    if (id === 'emergency' || id === 'card') { const lid = id === 'emergency' ? 'goal' : 'extraDebt'; const l = LEVERS.find(x => x.id === lid); const v = Math.min(l.max, Math.max(l.min, Math.round((s.lv[lid] + d) * 100) / 100)); return Object.assign({ lv: Object.assign({}, s.lv, { [lid]: v }), lastLever: lid, ripple: s.ripple + 1 }, idle); }
+    return Object.assign({ goals: s.goals.map(g => g.id === id ? Object.assign({}, g, { monthly: Math.max(0, Math.round((g.monthly + d) * 100) / 100) }) : g), lastLever: null, ripple: s.ripple + 1 }, idle); });
   H.removeGoal = id => memo('rg' + id, () => { const s = S(); const g = s.goals.find(x => x.id === id); if (!g || g.fixed) return; set({ goals: s.goals.filter(x => x.id !== id), route: s.route === id ? 'cash' : s.route, ripple: s.ripple + 1, lastLever: null }); H.pushProfile(); H.toast(g.name + ' removed from your stream.'); });
   H.applyGoal = (inp, live) => {
     const s = S(); const g = normalizeGoal(inp || {});
@@ -561,27 +566,39 @@ function handlers(c) {
     if (c._serverOk && !/^p\d/.test(id)) { const r = await api('DELETE', '/planned-payments/' + id); if (r.ok) { adopt(r.data); H.pushProfile(); H.toast('Removed from your plan.'); } else H.toast('Couldn’t remove it. Try again.'); return; }
     set({ planned: S().planned.filter(p => p.id !== id) }); H.toast('Removed from your plan.'); });
   // Savings goals are reviewed by the server agents. Debt cards (no server review type) keep the calculator check, labeled as such.
-  H.goalReview = id => memo('gr' + id, async () => {
+  // Savings goals go to the agents as goal_contribution; cards and loans as debt_monthly (the signed change per month).
+  const reviewGoal = async id => {
     const s = S(), g = resolveGoals(s.goals, s.P).find(x => x.id === id); if (!g) return;
-    if (g.kind !== 'save' || !c._serverOk) { set({ goalRev: { id, phase: 'idle', step: 0, res: null } }); runSteps('goalRev', 3, { id }); return; }
-    const amount = goalMonthly(g, s.lv, false); animate('goalRev', 3, { id });
-    try { const r = await runServer('/reviews', { action: { kind: 'goal_contribution', goalId: id, amountCents: cents(amount) } });
-      finish('goalRev', r.ok && r.data.status === 'completed' ? { receipt: r.data.receipt, amount } : { error: reviewError(r) }); }
+    const amount = goalMonthly(g, s.lv, false), was = goalMonthly(g, s.plan, true);
+    if (cents(amount) === cents(was)) { H.toast('That leaves the monthly amount the same.'); return; }
+    if (!c._serverOk) { set({ goalRev: { id, phase: 'idle', step: 0, res: null } }); runSteps('goalRev', 3, { id }); return; }
+    const action = g.kind === 'save' ? { kind: 'goal_contribution', goalId: id, amountCents: cents(amount) } : { kind: 'debt_monthly', debtId: id, changeCents: cents(amount) - cents(was) };
+    animate('goalRev', 3, { id });
+    try { const r = await runServer('/reviews', { action });
+      finish('goalRev', r.ok && r.data.status === 'completed' ? { receipt: r.data.receipt, amount, action } : { error: reviewError(r) }); }
     catch (e) { finish('goalRev', { error: 'The NextMove server couldn’t be reached.' }); }
-  });
+  };
+  H.goalReview = id => memo('gr' + id, () => {
+    const raw = ((S().adj || {})[id] || '').replace(/[\s,$]/g, '').replace('−', '-');
+    if (!raw) { reviewGoal(id); return; }
+    const m = /^([+-]?)(\d+(?:\.\d{1,2})?)$/.exec(raw);
+    if (!m || +m[2] === 0) { H.toast('Type a change like +30 or -40.'); return; }
+    H.bumpBy(id, (m[1] === '-' ? -1 : 1) * +m[2]); c.setState(st => ({ adj: Object.assign({}, st.adj, { [id]: '' }) }));
+    setTimeout(() => reviewGoal(id), 30); });
   H.goalApprove = id => memo('ga' + id, async () => { const s = S(), g = c._goalResult && c._goalResult[id], res = s.goalRev.res;
     if (res && res.receipt) {
-      try { await approve({ kind: 'goal_contribution', goalId: id, amountCents: cents(res.amount), receiptId: res.receipt.id }); }
-      catch (e) { H.toast(e && e.status === 422 ? 'The server blocked it: it’s over your monthly budget.' : 'Your numbers changed. Review the change again.'); set({ goalRev: { id: null, phase: 'idle', step: 0 } }); return; }
+      try { await approve(Object.assign({}, res.action, { receiptId: res.receipt.id })); }
+      catch (e) { H.toast(e && e.status === 422 ? 'The server blocked it: it’s over your monthly budget or under your cushion.' : 'Your numbers changed. Review the change again.'); set({ goalRev: { id: null, phase: 'idle', step: 0 } }); return; }
     }
     const cur = S(); const patch = { goalRev: { id: null, phase: 'idle', step: 0 } };
     if (id === 'emergency') patch.plan = Object.assign({}, cur.plan, { goal: cur.lv.goal }); else if (id === 'card') patch.plan = Object.assign({}, cur.plan, { extraDebt: cur.lv.extraDebt });
     else patch.goals = cur.goals.map(x => x.id === id ? Object.assign({}, x, { planMonthly: x.monthly }) : x);
     set(patch); H.pushProfile();
-    if (g) H.addReceipt({ title: 'Goal change · ' + g.name + ' ' + g.from + ' → ' + g.to + ' a month', verdict: 'Approved', tone: 'good', kind: 'Goal review', facts: g.facts,
-      checks: res && res.receipt ? [['Agent review: ' + (VERDICT[res.receipt.verdict] || ['Reviewed'])[0], true], ['Server re-checked your budget', true], ['Approved once by you', true]] : [['Fits your monthly budget', true], ['Approved once by you', true]],
-      steps: res && res.receipt ? traceSteps(res.receipt) : g.stepsRaw, note: (res && res.receipt ? res.receipt.summary + ' ' : 'Calculator check only. ') + 'Changed your monthly goal setting. No money moved.' });
-    H.toast('Goal plan updated.'); });
+    const isDebt = !!(g && !isSaveGoal(resolveGoals(cur.goals, cur.P).find(x => x.id === id) || { kind: 'save' }));
+    if (g) H.addReceipt({ title: (isDebt ? 'Debt payment change · ' : 'Goal change · ') + g.name + ' ' + g.from + ' → ' + g.to + ' a month', verdict: 'Approved', tone: 'good', kind: isDebt ? 'Debt review' : 'Goal review', facts: g.facts,
+      checks: res && res.receipt ? [['Agent review: ' + (VERDICT[res.receipt.verdict] || ['Reviewed'])[0], true], [isDebt ? 'Server re-checked your cushion and budget' : 'Server re-checked your budget', true], ['Approved once by you', true]] : [['Fits your monthly budget', true], ['Approved once by you', true]],
+      steps: res && res.receipt ? traceSteps(res.receipt) : g.stepsRaw, note: (res && res.receipt ? res.receipt.summary + ' ' : 'Calculator check only. ') + (isDebt ? 'Changed your monthly payment plan for this debt. No money moved.' : 'Changed your monthly goal setting. No money moved.') });
+    H.toast(isDebt ? 'Payment plan updated. Koin never moves money.' : 'Goal plan updated.'); });
   H.goalCancel = () => set({ goalRev: { id: null, phase: 'idle', step: 0 } });
   H.lockReview = () => runSteps('lockRev', 3);
   H.lockApprove = () => { const s = S(), g = c._lockResult; set({ plan: s.lv, goals: s.goals.map(x => x.fixed ? x : Object.assign({}, x, { planMonthly: x.monthly })), lockRev: { phase: 'idle', step: 0 }, lastLever: null }); H.pushProfile();
@@ -939,7 +956,7 @@ function view(c, React, L) {
     const stepsRaw = [['Financial engine', 'CODE', 'Recalculated this goal and your monthly budget.'], ['Verifier', 'CODE', ok ? 'Fits your budget and keeps your cushion. Passed.' : sim.leftover < 0 ? 'Over budget by ' + money(-sim.leftover) + ' a month. Blocked.' : 'Would dip under your cushion. Blocked.'], ['Coach', 'AI', 'Summarized the change with verified figures.']];
     c._goalResult[g.id] = { name: g.name, from: money(planBase), to: money(baseM), facts, stepsRaw };
     const mine = gr.id === g.id; const gres = mine && gr.phase === 'done' ? gr.res : null, grc = gres && gres.receipt, gv = grc ? VERDICT[grc.verdict] || ['Reviewed', 'info'] : gres ? ['Couldn’t check', 'warn'] : null;
-    const viaServer = isSaveGoal(g) && c._serverOk;
+    const viaServer = c._serverOk;
     const isSave = g.kind === 'save';
     const pct = isSave ? Math.min(100, g.saved / g.target * 100) : 0;
     const late = isSave && g.deadline && r.date && r.date > g.deadline;
@@ -949,10 +966,10 @@ function view(c, React, L) {
       pct: (isSave ? pct : 0).toFixed(1) + '%', progressText: isSave ? money(g.saved) + ' of ' + money(g.target) + ' saved' : money(r.owe !== undefined ? r.owe : g.balance) + ' owed · ' + (g.apr == null ? 'APR unknown' : g.apr + '% APR'),
       monthly: money(m), duration: fmtDur(r.months), third: isSave ? money(Math.max(0, g.target - g.saved)) : r.interest === null ? '—' : money(r.interest), thirdLabel: isSave ? 'Still to save' : 'Total interest',
       hasRouted: s.route === g.id && sim.freed > 0, routed: '+' + money(Math.max(0, sim.freed)) + ' freed up',
-      down: H.bump(g.id, -25), up: H.bump(g.id, 25), removable: !g.fixed, remove: H.removeGoal(g.id), note, hasNote: !!note,
-      changed: chg, idle: !mine || gr.phase === 'idle', reviewing: mine && gr.phase === 'reviewing', done: mine && gr.phase === 'done', showReview: chg && (!mine || gr.phase === 'idle'),
+      adj: (s.adj || {})[g.id] || '', setAdj: H.adjField(g.id), adjKey: H.adjKey(g.id), removable: !g.fixed, remove: H.removeGoal(g.id), note, hasNote: !!note,
+      changed: chg, idle: !mine || gr.phase === 'idle', reviewing: mine && gr.phase === 'reviewing', done: mine && gr.phase === 'done', showReview: (chg || !!((s.adj || {})[g.id] || '').trim()) && (!mine || gr.phase === 'idle'),
       review: H.goalReview(g.id), approve: H.goalApprove(g.id), cancel: H.goalCancel, ok: gres ? !!grc && grc.policy === 'allowed' : ok, verdict: gv ? gv[0] : ok ? 'Looks good' : 'Over budget', vTone: T(gv ? gv[1] : ok ? 'good' : 'bad'), vBg: T((gv ? gv[1] : ok ? 'good' : 'bad') + '-soft'),
-      summary: gres ? (grc ? grc.summary : gres.error) : 'Calculator check: ' + (ok ? 'fits your budget and keeps your cushion.' : 'over budget or under your cushion.') + (isSave ? '' : ' Debt changes aren’t reviewed by the agents yet.'),
+      summary: gres ? (grc ? grc.summary : gres.error) : 'Calculator check: ' + (ok ? 'fits your budget and keeps your cushion.' : 'over budget or under your cushion.'),
       steps: stepRows(viaServer ? [['Financial engine', 'CODE', ''], ['Verifier', 'CODE', ''], ['Coach', 'AI', '']] : stepsRaw, mine && gr.phase === 'reviewing' ? gr.step : undefined), showNote: !!note && !(mine && gr.phase !== 'idle') };
   });
   const hubGoals = goalCards.map(gc => ({ name: gc.name, date: gc.bigDate, color: gc.color, verb: gc.verb, onClick: H.jump(Math.max(0, gc.left - 200)) }));

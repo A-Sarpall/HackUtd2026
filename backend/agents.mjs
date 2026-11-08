@@ -138,6 +138,17 @@ function fallbackReview(review,selected,s){
   if(review.warnings.includes('low_emergency_savings'))parts.push('Your emergency savings cover {emergency_coverage} of essential bills, so keeping extra cash may be safer.');
   return {verdict:review.warnings.some(w=>['thin_margin','low_emergency_savings'].includes(w))?'caution':'good_idea',text:parts.join(' ')};
  }
+ if(review.kind==='debt_monthly'){
+  const w=review.warnings,up=review.comparison.changeCents>0;
+  if(blocked)return {verdict:'not_recommended',text:'Paying {change} more a month toward {debt_name} '+(w.includes('below_cushion')?'would bring checking to {lowest_balance} on {lowest_date}, which is {shortfall} below your {cushion} safety cushion.':'is more than the {leftover_now} you have left each month after bills, debt payments and goals.')+(selected==='smaller'?' Paying {smaller_amount} more instead would fit.':'')};
+  const parts=[up?'Paying {change} more a month toward {debt_name} keeps checking above your {cushion} cushion; the lowest point would be {lowest_balance} on {lowest_date}.':'Paying {change} less a month toward {debt_name} frees up cash each month.'];
+  if(f.months_now&&f.months_new)parts.push(up?'It would be paid off in {months_new} instead of {months_now}.':'Payoff would take {months_new} instead of {months_now}.');
+  if(f.interest_saved)parts.push('Estimated interest saved: {interest_saved}.');
+  if(w.includes('apr_unknown'))parts.push('Add its interest rate to see how this changes payoff time and interest.');
+  if(w.includes('budget_unknown'))parts.push('Add your take-home pay to check whether this fits your monthly budget.');
+  if(w.includes('low_emergency_savings')&&up)parts.push('Your emergency savings cover {emergency_coverage} of essential bills, so keeping some cash may be safer.');
+  return {verdict:!up||w.some(x=>['thin_margin','low_emergency_savings','budget_unknown'].includes(x))?'caution':'good_idea',text:parts.join(' ')};
+ }
  if(blocked)return {verdict:'not_recommended',text:'Setting aside {new_amount} a month for {goal_name} is more than the {leftover_now} you have left each month after bills, debt payments and goals.'+(selected==='smaller'?' Up to {max_affordable} a month would fit your budget.':'')};
  const parts=[f.months_new&&f.months_now?'At {new_amount} a month, {goal_name} would reach its target in {months_new} instead of {months_now}.':f.months_new?'At {new_amount} a month, {goal_name} would reach its target in {months_new}.':'At {new_amount} a month, {goal_name} would not make progress toward its target.'];
  if(f.leftover_new)parts.push('You would have {leftover_new} left each month after bills, debt payments and goals.');
@@ -149,13 +160,13 @@ function fallbackReview(review,selected,s){
 export async function runActionReview(s,action,{complete,deadlineMs=45000}={}){
  const {trace,role,tool}=createRunner({complete,deadlineMs});
  const review=tool(()=>reviewFacts(s,action));
- const payment=review.kind==='debt_payment',blocked=review.policy==='blocked';
- trace.push({role:'Financial engine',tool:payment?'compare_payment':'project_goal',status:'completed'});
- trace.push({role:'Verifier',tool:payment?'cash_floor_check':'monthly_budget_check',status:blocked?'rejected_requested':'passed'});
+ const payment=review.kind==='debt_payment',debtPlan=review.kind==='debt_monthly',blocked=review.policy==='blocked';
+ trace.push({role:'Financial engine',tool:payment?'compare_payment':debtPlan?'project_debt_plan':'project_goal',status:'completed'});
+ trace.push({role:'Verifier',tool:payment?'cash_floor_check':debtPlan?'cash_floor_and_budget_check':'monthly_budget_check',status:blocked?'rejected_requested':'passed'});
  const safeKeys=Object.keys(review.options).filter(k=>k!=='requested'&&review.options[k].policy==='allowed');
  const ai=!!complete||!!process.env.NVIDIA_API_KEY;
- const details=payment?review.comparison:{progressNow:review.progressNow,progressNew:review.progressNew,leftoverNowCents:review.leftoverNowCents,leftoverNewCents:review.leftoverNewCents};
- const common={kind:'action_review',action:{kind:review.kind,amountCents:action.amountCents,date:payment?action.date:null},policy:review.policy,options:review.options,warnings:review.warnings,details,
+ const details=payment||debtPlan?review.comparison:{progressNow:review.progressNow,progressNew:review.progressNew,leftoverNowCents:review.leftoverNowCents,leftoverNewCents:review.leftoverNewCents};
+ const common={kind:'action_review',action:debtPlan?{kind:review.kind,debtId:action.debtId,changeCents:action.changeCents,date:null}:{kind:review.kind,amountCents:action.amountCents,date:payment?action.date:null},policy:review.policy,options:review.options,warnings:review.warnings,details,
   snapshotId:s.id,snapshotVersion:s.version,goalVersion:s.goal?.version??null,trace,assumptions:s.assumptions,actionId:null,approvalRequired:!blocked,
   checks:{calculation:'deterministic',policy:blocked?'blocked':'passed',figures:'verified placeholders only'},
   provenance:{mode:complete?'test_provider':process.env.NVIDIA_API_KEY?'live':'deterministic',model:ai?model:null}};
@@ -167,7 +178,7 @@ export async function runActionReview(s,action,{complete,deadlineMs=45000}={}){
  }
  const tokens=Object.fromEntries(Object.entries(review.facts).filter(([,v])=>v!=null));
  const coach=await role('Coach','Review an action the user is about to approve in a personal finance app. JSON {"verdict":"good_idea"|"caution"|"not_recommended","text":string}. In two to four short sentences specific to this user, explain how the action changes their checking balance, debt or goal, and whether it is a good idea and why. Never write digits, currency symbols or percent signs. To mention a figure, insert one of the listed placeholders exactly, such as {lowest_balance}; use only listed placeholders. If policy is blocked, verdict must be not_recommended. If a safer option is selected, recommend it with its placeholders. Mention missing information when it matters. Do not promise outcomes.',
-  {action:review.kind,policy:review.policy,selected,warnings:review.warnings,placeholders:tokens});
+  {action:review.kind,...(debtPlan?{about:'The user wants to pay '+(review.comparison.changeCents>0?'more':'less')+' toward one card or loan every month. Placeholder change is the size of that change.'}:{}),policy:review.policy,selected,warnings:review.warnings,placeholders:tokens});
  const check=c=>{exact(c,['verdict','text']);
   if(!VERDICTS.includes(c.verdict)||(blocked&&c.verdict!=='not_recommended'))throw Error('INVALID_VERDICT');
   if(typeof c.text!=='string'||NUMBER_WORDS.test(c.text.replace(/\{[a-z_0-9]+\}/g,'')))throw Error('INVALID_COACH_OUTPUT');
@@ -178,7 +189,7 @@ export async function runActionReview(s,action,{complete,deadlineMs=45000}={}){
  catch(error){
   if(!['INVALID_COACH_OUTPUT','UNVERIFIED_NUMBER','UNKNOWN_PLACEHOLDER'].includes(error.message))throw error;
   const again=await role('Coach','Rewrite this review of an action in a personal finance app. JSON {"verdict":"good_idea"|"caution"|"not_recommended","text":string}. Your previous reply wrote a number, amount or date directly, or used a placeholder that is not listed. Use only the listed placeholders, such as {lowest_balance}; never write digits, currency symbols, percent signs or numbers in words. If policy is blocked, verdict must be not_recommended.',
-   {action:review.kind,policy:review.policy,selected,warnings:review.warnings,placeholders:tokens,previousReply:String(coach?.text||'').slice(0,1200)});
+   {action:review.kind,...(debtPlan?{about:'The user wants to pay '+(review.comparison.changeCents>0?'more':'less')+' toward one card or loan every month. Placeholder change is the size of that change.'}:{}),policy:review.policy,selected,warnings:review.warnings,placeholders:tokens,previousReply:String(coach?.text||'').slice(0,1200)});
   out=check(again);
  }
  return {...common,status:'ready',selected,verdict:out.verdict,summary:out.summary};

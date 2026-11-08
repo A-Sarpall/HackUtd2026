@@ -64,7 +64,9 @@ function overLimit(key,limit,windowMs){
  w.count++;return w.count>limit?Math.max(1,Math.ceil((w.reset-now)/1000)):0;
 }
 function limited(res,retryAfter,code){res.setHeader('Retry-After',String(retryAfter));return json(res,429,{error:{code}});}
-function parseAction(a){if(!a||typeof a!=='object'||Array.isArray(a))throw Error('INVALID_ACTION');if(a.kind==='debt_payment'){if(typeof a.date!=='string')throw Error('INVALID_DATE');return {kind:'debt_payment',amountCents:integer(a.amountCents),date:a.date};}if(a.kind==='goal_contribution'){if(a.goalId!=null&&(typeof a.goalId!=='string'||!a.goalId||a.goalId.length>80))throw Error('INVALID_GOAL');return {kind:'goal_contribution',amountCents:integer(a.amountCents),date:null,goalId:a.goalId??null};}throw Error('UNSUPPORTED_ACTION');}
+function parseAction(a){if(!a||typeof a!=='object'||Array.isArray(a))throw Error('INVALID_ACTION');if(a.kind==='debt_payment'){if(typeof a.date!=='string')throw Error('INVALID_DATE');return {kind:'debt_payment',amountCents:integer(a.amountCents),date:a.date};}if(a.kind==='goal_contribution'){if(a.goalId!=null&&(typeof a.goalId!=='string'||!a.goalId||a.goalId.length>80))throw Error('INVALID_GOAL');return {kind:'goal_contribution',amountCents:integer(a.amountCents),date:null,goalId:a.goalId??null};}if(a.kind==='debt_monthly'){if(typeof a.debtId!=='string'||!a.debtId||a.debtId.length>40)throw Error('NO_DEBT');if(!Number.isSafeInteger(a.changeCents)||a.changeCents===0||Math.abs(a.changeCents)>1e9)throw Error('INVALID_AMOUNT');
+ // The signed monthly change is stored in the action's amount column and the debt id in goal_id.
+ return {kind:'debt_monthly',debtId:a.debtId,changeCents:a.changeCents,amountCents:a.changeCents,date:null};}throw Error('UNSUPPORTED_ACTION');}
 // Source key for a stored snapshot: a plan made against one customer's data never carries over to another source.
 const sourceKey=raw=>raw.customerId?'nessie:'+raw.customerId:raw.id;
 function storeSource(owner,next){
@@ -133,7 +135,7 @@ if(requestGuard(req,res))return;
    db.prepare('INSERT INTO receipts VALUES (?,?,?)').run(id,owner,JSON.stringify(record.receipt));
    db.prepare('DELETE FROM receipts WHERE owner=? AND rowid NOT IN (SELECT rowid FROM receipts WHERE owner=? ORDER BY rowid DESC LIMIT ?)').run(owner,owner,config.receiptsPerSession);
   }catch(error){
-   if(['NO_GOAL','PAYMENT_EXCEEDS_DEBT','INVALID_AMOUNT','INVALID_DATE','DATE_OUTSIDE_HORIZON'].includes(error.message)){runs.delete(id);return json(res,400,{error:{code:error.message}});}
+   if(['NO_GOAL','NO_DEBT','PAYMENT_EXCEEDS_DEBT','INVALID_AMOUNT','INVALID_DATE','DATE_OUTSIDE_HORIZON'].includes(error.message)){runs.delete(id);return json(res,400,{error:{code:error.message}});}
    console.error(JSON.stringify({level:'warn',event:'review_failed',runId:id,reason:safeReason(error)}));delete record.receipt;record.status='failed';record.error='MODEL_OR_VALIDATION_FAILURE';
   }
   return json(res,200,{runId:id,status:record.status,receipt:record.receipt,error:record.error});
@@ -144,17 +146,18 @@ if(requestGuard(req,res))return;
   const target=action.kind==='goal_contribution'?(action.goalId==null?s.goals[0]:s.goals.find(x=>x.id===action.goalId)):null;
   if(action.kind==='goal_contribution'&&!target)return json(res,400,{error:{code:'NO_GOAL'}});
   if(b.receiptId){const row=db.prepare('SELECT data FROM receipts WHERE id=? AND owner=?').get(b.receiptId,owner);if(!row)throw Error('INVALID_RECEIPT');const receipt=JSON.parse(row.data);if(receipt.snapshotId!==s.id||receipt.snapshotVersion!==s.version||receipt.status!=='ready'||receipt.goalVersion!==goal.version)throw Error('STALE_RECEIPT');}
-  let review;try{review=reviewFacts(s,action);}catch(error){if(['NO_GOAL','PAYMENT_EXCEEDS_DEBT','INVALID_AMOUNT'].includes(error.message))return json(res,400,{error:{code:error.message}});throw error;}
+  let review;try{review=reviewFacts(s,action);}catch(error){if(['NO_GOAL','NO_DEBT','PAYMENT_EXCEEDS_DEBT','INVALID_AMOUNT'].includes(error.message))return json(res,400,{error:{code:error.message}});throw error;}
   // Server policy: an action that fails its safety check cannot be proposed or approved.
-  if(review.policy==='blocked')return json(res,422,{error:{code:action.kind==='debt_payment'?'BELOW_CUSHION':'OVER_BUDGET'}});
+  if(review.policy==='blocked')return json(res,422,{error:{code:action.kind==='debt_payment'||review.warnings.includes('below_cushion')?'BELOW_CUSHION':'OVER_BUDGET'}});
   const id=randomUUID(),expires=Date.now()+300000;
-  const goalId=target?target.id:null;
+  const goalId=target?target.id:action.kind==='debt_monthly'?action.debtId:null;
   const hash=createHash('sha256').update(JSON.stringify({owner,id,kind:action.kind,amountCents:action.amountCents,date:action.date,goalId,goalVersion:goal.version,snapshotId:s.id,snapshotVersion:s.version,receiptId:b.receiptId||null})).digest('hex');
   db.exec('BEGIN IMMEDIATE');
   try{db.prepare('INSERT INTO actions(id,owner,amount,version,hash,expires,status,kind,date,goal_id) VALUES (?,?,?,?,?,?,?,?,?,?)').run(id,owner,action.amountCents,goal.version,hash,expires,'proposed',action.kind,action.date,goalId);db.prepare('INSERT INTO action_context VALUES (?,?,?,?)').run(id,s.id,s.version,b.receiptId||null);db.exec('COMMIT');}
   catch(error){db.exec('ROLLBACK');throw error;}
   const base={id,kind:action.kind,proposalHash:hash,expectedGoalVersion:goal.version,snapshotVersion:s.version,expires,warnings:review.warnings};
   if(action.kind==='debt_payment')return json(res,201,{...base,amountCents:action.amountCents,date:action.date,comparison:review.comparison,effect:'Adds this extra payment to your NextMove plan and outlook. NextMove does not send money; pay your lender directly.'});
+  if(action.kind==='debt_monthly')return json(res,201,{...base,debtId:action.debtId,changeCents:action.changeCents,comparison:review.comparison,effect:'Changes how much you plan to pay toward this debt each month in NextMove. No money moves.'});
   return json(res,201,{...base,goalId,oldAmountCents:target.monthlyCents,newAmountCents:action.amountCents,goalImpact:goalImpact(target,target.monthlyCents,action.amountCents),progressNow:review.progressNow,progressNew:review.progressNew,leftoverNowCents:review.leftoverNowCents,leftoverNewCents:review.leftoverNewCents,effect:'Changes your goal’s monthly amount in NextMove. No money moves and no transfer is scheduled.'});
  }
  if(/^\/api\/v1\/actions\/[^/]+\/approve$/.test(path)&&req.method==='POST'){
@@ -170,9 +173,19 @@ if(requestGuard(req,res))return;
    const fresh=context&&context.snapshotId===s.id&&context.snapshotVersion===s.version&&a.expires>=Date.now()&&g.version===a.version&&b.expectedGoalVersion===g.version&&b.snapshotVersion===s.version;
    // Re-run the safety check at approval time as defense in depth.
    const goalIndex=kind==='goal_contribution'?(a.goal_id==null?0:s.goals.findIndex(x=>x.id===a.goal_id)):-1;
-   const stillAllowed=fresh&&(kind==='goal_contribution'?goalIndex>=0&&!!s.goals[goalIndex]:true)&&reviewFacts(s,{kind,amountCents:a.amount,date:a.date,goalId:a.goal_id??null}).policy==='allowed';
+   const stillAllowed=fresh&&(kind==='goal_contribution'?goalIndex>=0&&!!s.goals[goalIndex]:true)&&reviewFacts(s,kind==='debt_monthly'?{kind,changeCents:a.amount,debtId:a.goal_id}:{kind,amountCents:a.amount,date:a.date,goalId:a.goal_id??null}).policy==='allowed';
    if(!stillAllowed){db.exec('ROLLBACK');return json(res,409,{error:{code:'STALE_APPROVAL'}});}
    if(kind==='debt_payment'){db.prepare('INSERT INTO planned_payments VALUES (?,?,?,?,?)').run(id,owner,a.amount,a.date,Date.now());db.prepare('INSERT OR REPLACE INTO snapshots VALUES (?,?)').run(owner,JSON.stringify({...source(owner),version:s.version+1}));}
+   else if(kind==='debt_monthly'){
+    // Save the new monthly amount on the profile's debt and its planned payment, then advance the snapshot so the outlook includes it.
+    const p=profile(owner),d=(p.debts||[]).find(x=>x.id===a.goal_id);
+    if(d&&d.monthlyCents!=null)d.monthlyCents=Math.max(0,d.monthlyCents+a.amount);
+    if(p.debtPaymentsCents!=null)p.debtPaymentsCents=Math.max(0,p.debtPaymentsCents+a.amount);
+    const fi=(p.planFlows||[]).findIndex(x=>x.id==='debt-'+a.goal_id);
+    if(fi>=0){const next=p.planFlows[fi].cents-a.amount;if(next<0)p.planFlows[fi].cents=next;else p.planFlows.splice(fi,1);}
+    db.prepare('INSERT OR REPLACE INTO profiles VALUES (?,?)').run(owner,JSON.stringify(p));
+    db.prepare('INSERT OR REPLACE INTO snapshots VALUES (?,?)').run(owner,JSON.stringify({...source(owner),version:s.version+1}));
+   }
    else if(goalIndex===0)db.prepare('UPDATE goals SET amount=?,version=version+1 WHERE owner=?').run(a.amount,owner);
    else{
     // Goals after the first keep their monthly amount in the saved profile; the goal version still advances so older proposals go stale.
